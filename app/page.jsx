@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { TEAMS } from '@/lib/teams';
+import { useFavourites } from '@/lib/FavouritesContext';
 import TeamSelector from '@/components/TeamSelector';
 
 const LIVE_STATUSES = ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'];
 const POLL_INTERVAL = 30_000;
 
 function LiveMatchCard({ match }) {
+  const { favourites } = useFavourites();
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
@@ -27,7 +28,6 @@ function LiveMatchCard({ match }) {
   const awayScore = score?.fullTime?.away ?? 0;
   const halfTimeHome = score?.halfTime?.home;
   const halfTimeAway = score?.halfTime?.away;
-  const isHome = id => TEAMS.some(t => t.id === id);
 
   const homeGoals = goals?.filter(g => g.team?.id === homeTeam?.id) || [];
   const awayGoals = goals?.filter(g => g.team?.id === awayTeam?.id) || [];
@@ -211,16 +211,15 @@ function LiveMatchCard({ match }) {
 }
 
 function UpcomingMatchCard({ match }) {
-  const trackedIds = new Set(TEAMS.map(t => t.id));
+  const { favourites } = useFavourites();
+  const trackedIds = new Set(favourites.map(t => t.id));
   const homeTracked = trackedIds.has(match.homeTeam?.id);
   const awayTracked = trackedIds.has(match.awayTeam?.id);
 
   return (
     <div className={`match-card ${homeTracked || awayTracked ? 'tracked' : ''}`}>
       <div className="team-home">
-        {match.homeTeam?.crest && (
-          <img src={match.homeTeam.crest} alt="" className="team-crest" />
-        )}
+        {match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" className="team-crest" />}
         <span className={`team-name ${homeTracked ? 'tracked-name' : ''}`}>
           {match.homeTeam?.shortName || match.homeTeam?.name}
         </span>
@@ -235,9 +234,7 @@ function UpcomingMatchCard({ match }) {
         <div className="match-competition">{match.competition?.name}</div>
       </div>
       <div className="team-away">
-        {match.awayTeam?.crest && (
-          <img src={match.awayTeam.crest} alt="" className="team-crest" />
-        )}
+        {match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" className="team-crest" />}
         <span className={`team-name ${awayTracked ? 'tracked-name' : ''}`}>
           {match.awayTeam?.shortName || match.awayTeam?.name}
         </span>
@@ -247,6 +244,7 @@ function UpcomingMatchCard({ match }) {
 }
 
 export default function FixturesPage() {
+  const { favourites } = useFavourites();
   const [liveMatches, setLiveMatches] = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,31 +253,33 @@ export default function FixturesPage() {
   const intervalRef = useRef(null);
 
   async function fetchMatches() {
+    if (favourites.length === 0) return;
     try {
       const today = new Date().toISOString().split('T')[0];
-      const url = selectedTeam === 'all'
-        ? `/api/matches?dateFrom=${today}&dateTo=${today}`
-        : `/api/matches?dateFrom=${today}&dateTo=${today}&teamId=${selectedTeam}`;
+      const teamIds = favourites.map(t => t.id);
+
+      // Build URL based on selection
+      const baseParams = selectedTeam === 'all'
+        ? `teamIds=${teamIds.join(',')}`
+        : `teamId=${selectedTeam}`;
 
       const [todayRes, upcomingRes] = await Promise.all([
-        fetch(url),
-        fetch(selectedTeam === 'all'
-          ? '/api/matches'
-          : `/api/matches?teamId=${selectedTeam}`
-        ),
+        fetch(`/api/matches?${baseParams}&dateFrom=${today}&dateTo=${today}`),
+        fetch(`/api/matches?${baseParams}`),
       ]);
 
       const todayData = await todayRes.json();
       const upcomingData = await upcomingRes.json();
 
-      const todayMatches = todayData.matches || [];
-      const live = todayMatches.filter(m => LIVE_STATUSES.includes(m.status));
+      const live = (todayData.matches || []).filter(m =>
+        LIVE_STATUSES.includes(m.status)
+      );
 
-      const upcoming = (upcomingData.matches || []).filter(
-        m => m.status !== 'FINISHED' &&
-             m.status !== 'AWARDED' &&
-             m.status !== 'CANCELLED' &&
-             !LIVE_STATUSES.includes(m.status)
+      const upcoming = (upcomingData.matches || []).filter(m =>
+        m.status !== 'FINISHED' &&
+        m.status !== 'AWARDED' &&
+        m.status !== 'CANCELLED' &&
+        !LIVE_STATUSES.includes(m.status)
       );
 
       setLiveMatches(live);
@@ -292,10 +292,11 @@ export default function FixturesPage() {
   }
 
   useEffect(() => {
+    if (favourites.length === 0) return;
     fetchMatches();
     intervalRef.current = setInterval(fetchMatches, POLL_INTERVAL);
     return () => clearInterval(intervalRef.current);
-  }, [selectedTeam]);
+  }, [selectedTeam, favourites]);
 
   const grouped = upcomingMatches.reduce((acc, match) => {
     const date = match.utcDate.split('T')[0];
@@ -309,13 +310,13 @@ export default function FixturesPage() {
       <header className="site-header">
         <div className="header-inner">
           <div className="header-crests">
-            {TEAMS.map(t => (
+            {favourites.map(t => (
               <img key={t.id} src={t.crest} alt={t.shortName} className="header-crest" />
             ))}
           </div>
           <div>
-            <h1 className="site-title">Football Tracker</h1>
-            <p className="site-subtitle">2026/27 Season</p>
+            <h1 className="site-title">Bolton Wanderers</h1>
+<p className="site-subtitle">2026/27 Season</p>
           </div>
         </div>
       </header>

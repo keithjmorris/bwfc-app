@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TEAMS } from '@/lib/teams';
+import { useFavourites } from '@/lib/FavouritesContext';
 
 export default function StandingsPage() {
+  const { favourites } = useFavourites();
   const [plStandings, setPlStandings] = useState([]);
   const [elcStandings, setElcStandings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +23,19 @@ export default function StandingsPage() {
         const plData = await plRes.json();
         const elcData = await elcRes.json();
 
-        setPlStandings(plData.standings?.[0]?.table || []);
-        setElcStandings(elcData.standings?.[0]?.table || []);
+        const trackedIds = new Set(favourites.map(t => t.id));
+
+        const markTracked = standings =>
+          standings?.map(group => ({
+            ...group,
+            table: group.table.map(row => ({
+              ...row,
+              tracked: trackedIds.has(row.team?.id),
+            })),
+          }));
+
+        setPlStandings(markTracked(plData.standings)?.[0]?.table || []);
+        setElcStandings(markTracked(elcData.standings)?.[0]?.table || []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -31,9 +43,10 @@ export default function StandingsPage() {
       }
     }
     fetchStandings();
-  }, []);
+  }, [favourites]);
 
   function StandingsTable({ title, rows, emblem }) {
+    if (!rows || rows.length === 0) return null;
     return (
       <section className="standings-section">
         <div className="standings-header">
@@ -58,10 +71,7 @@ export default function StandingsPage() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr
-                  key={row.team.id}
-                  className={row.tracked ? 'tracked-team' : ''}
-                >
+                <tr key={row.team.id} className={row.tracked ? 'tracked-team' : ''}>
                   <td className="pos-col">{row.position}</td>
                   <td className="team-col">
                     <img src={row.team.crest} alt="" className="table-crest" />
@@ -89,7 +99,7 @@ export default function StandingsPage() {
       <header className="site-header">
         <div className="header-inner">
           <div className="header-crests">
-            {TEAMS.map(t => (
+            {favourites.map(t => (
               <img key={t.id} src={t.crest} alt={t.shortName} className="header-crest" />
             ))}
           </div>

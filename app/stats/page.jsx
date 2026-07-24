@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TEAMS } from '@/lib/teams';
+import { useFavourites } from '@/lib/FavouritesContext';
+import MatchStats from '@/components/MatchStats';
 
 function StatBadge({ value, type }) {
   if (!value) return <span className="stat-zero">—</span>;
@@ -39,7 +40,6 @@ function TeamSeasonStats({ stats, team }) {
         </div>
       </div>
 
-      {/* Record */}
       <div className="team-stats-grid">
         <div className="team-stat-card">
           <span className="team-stat-value">{stats.played}</span>
@@ -75,7 +75,6 @@ function TeamSeasonStats({ stats, team }) {
         </div>
       </div>
 
-      {/* Performance */}
       <div className="team-stats-divider">Performance Averages</div>
       <div className="team-stats-grid">
         <div className="team-stat-card">
@@ -178,7 +177,8 @@ function PlayerRow({ player, isExpanded, onToggle }) {
 }
 
 export default function StatsPage() {
-  const [selectedTeam, setSelectedTeam] = useState(TEAMS[0]);
+  const { favourites } = useFavourites();
+  const [selectedTeam, setSelectedTeam] = useState(null);
   const [competition, setCompetition] = useState('all');
   const [players, setPlayers] = useState([]);
   const [teamStats, setTeamStats] = useState(null);
@@ -186,6 +186,12 @@ export default function StatsPage() {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [sortBy, setSortBy] = useState('apps');
+
+  useEffect(() => {
+    if (favourites.length > 0 && !selectedTeam) {
+      setSelectedTeam(favourites[0]);
+    }
+  }, [favourites]);
 
   useEffect(() => {
     if (!selectedTeam) return;
@@ -219,12 +225,12 @@ export default function StatsPage() {
       <header className="site-header">
         <div className="header-inner">
           <div className="header-crests">
-            {TEAMS.map(t => (
+            {favourites.map(t => (
               <img key={t.id} src={t.crest} alt={t.shortName} className="header-crest" />
             ))}
           </div>
           <div>
-            <h1 className="site-title">Stats</h1>
+            <h1 className="site-title">Player Stats</h1>
             <p className="site-subtitle">2026/27 Season</p>
           </div>
         </div>
@@ -232,10 +238,10 @@ export default function StatsPage() {
 
       {/* Team tabs */}
       <div className="stats-team-tabs">
-        {TEAMS.map(t => (
+        {favourites.map(t => (
           <button
-  key={t.id}
-  className={`stats-team-tab ${selectedTeam?.id === t.id ? 'active' : ''}`}
+            key={t.id}
+            className={`stats-team-tab ${selectedTeam?.id === t.id ? 'active' : ''}`}
             style={selectedTeam?.id === t.id ? { borderBottomColor: t.color, color: t.color } : {}}
             onClick={() => {
               setSelectedTeam(t);
@@ -244,19 +250,20 @@ export default function StatsPage() {
               setExpanded(null);
             }}
           >
-<div style={{ width: 32, height: 32, flexShrink: 0, overflow: 'hidden' }}>
-  <img 
-    src={t.crest} 
-    alt="" 
-    style={{ 
-      width: '100%', 
-      height: '100%', 
-      objectFit: 'contain',
-      maxWidth: 32,
-      maxHeight: 32,
-    }} 
-  />
-</div>           <span>{t.shortName}</span>
+            <div style={{ width: 32, height: 32, flexShrink: 0, overflow: 'hidden' }}>
+              <img
+                src={t.crest}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  maxWidth: 32,
+                  maxHeight: 32,
+                }}
+              />
+            </div>
+            <span>{t.shortName}</span>
           </button>
         ))}
       </div>
@@ -267,7 +274,7 @@ export default function StatsPage() {
             <img src={selectedTeam.crest} alt="" className="stats-team-crest" />
             <span>{selectedTeam.name}</span>
           </div>
-           <div className="stats-toggles">
+          <div className="stats-toggles">
             <button
               className={`stats-toggle ${competition === 'all' ? 'active' : ''}`}
               onClick={() => setCompetition('all')}
@@ -287,19 +294,19 @@ export default function StatsPage() {
       )}
 
       <div className="content">
-        {loading && <p className="state-msg">Loading stats… this may take a moment on first load.</p>}
+        {loading && <p className="state-msg">Loading player stats…</p>}
         {error && <p className="state-msg error">Could not load stats: {error}</p>}
-        {!loading && !error && players.length === 0 && (
-  <div className="state-msg">
-    <p>No stats available yet.</p>
-    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
-      {selectedTeam?.competition === 'ELC'
-        ? `${selectedTeam.shortName} stats will be available once the Championship season starts on 9th August.`
-        : `${selectedTeam?.shortName} stats will be available once the season starts.`
-      }
-    </p>
-  </div>
-)}
+        {!loading && !error && players.length === 0 && selectedTeam && (
+          <div className="state-msg">
+            <p>No stats available yet.</p>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+              {selectedTeam?.competition === 'ELC'
+                ? `${selectedTeam.shortName} stats will be available once the Championship season starts on 9th August.`
+                : `${selectedTeam?.shortName} stats will be available once the season starts.`
+              }
+            </p>
+          </div>
+        )}
 
         {!loading && !error && players.length > 0 && (
           <>

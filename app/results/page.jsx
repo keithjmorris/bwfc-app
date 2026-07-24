@@ -1,10 +1,47 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TEAMS } from '@/lib/teams';
-import MatchCard from '@/components/MatchCard';
+import { useFavourites } from '@/lib/FavouritesContext';
 import TeamSelector from '@/components/TeamSelector';
 import MatchDetails from '@/components/MatchDetails';
+
+function MatchCard({ match }) {
+  const { favourites } = useFavourites();
+  const trackedIds = new Set(favourites.map(t => t.id));
+  const homeTracked = trackedIds.has(match.homeTeam?.id);
+  const awayTracked = trackedIds.has(match.awayTeam?.id);
+
+  const homeScore = match.score?.fullTime?.home;
+  const awayScore = match.score?.fullTime?.away;
+
+  return (
+    <div className={`match-card ${homeTracked || awayTracked ? 'tracked' : ''}`}>
+      <div className="team-home">
+        {match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" className="team-crest" />}
+        <span className={`team-name ${homeTracked ? 'tracked-name' : ''}`}>
+          {match.homeTeam?.shortName || match.homeTeam?.name}
+        </span>
+      </div>
+      <div className="match-centre">
+        <div className="match-score">
+          {homeScore ?? '—'} : {awayScore ?? '—'}
+        </div>
+        <div className="match-time">
+          {new Date(match.utcDate).toLocaleDateString('en-GB', {
+            day: 'numeric', month: 'short'
+          })}
+        </div>
+        <div className="match-competition">{match.competition?.name}</div>
+      </div>
+      <div className="team-away">
+        {match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" className="team-crest" />}
+        <span className={`team-name ${awayTracked ? 'tracked-name' : ''}`}>
+          {match.awayTeam?.shortName || match.awayTeam?.name}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function MatchSummary({ match }) {
   const [summary, setSummary] = useState(null);
@@ -48,17 +85,20 @@ function MatchSummary({ match }) {
 }
 
 export default function ResultsPage() {
+  const { favourites } = useFavourites();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState('all');
 
   useEffect(() => {
+    if (favourites.length === 0) return;
     async function fetchResults() {
       try {
+        const teamIds = favourites.map(t => t.id);
         const url = selectedTeam === 'all'
-          ? '/api/matches?status=FINISHED'
-          : `/api/matches?status=FINISHED&teamId=${selectedTeam}`;
+          ? `/api/matches?teamIds=${teamIds.join(',')}&status=FINISHED`
+          : `/api/matches?teamId=${selectedTeam}&status=FINISHED`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch results');
         const data = await res.json();
@@ -70,7 +110,7 @@ export default function ResultsPage() {
       }
     }
     fetchResults();
-  }, [selectedTeam]);
+  }, [selectedTeam, favourites]);
 
   const grouped = matches.reduce((acc, match) => {
     const date = match.utcDate.split('T')[0];
@@ -84,7 +124,7 @@ export default function ResultsPage() {
       <header className="site-header">
         <div className="header-inner">
           <div className="header-crests">
-            {TEAMS.map(t => (
+            {favourites.map(t => (
               <img key={t.id} src={t.crest} alt={t.shortName} className="header-crest" />
             ))}
           </div>

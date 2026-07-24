@@ -1,30 +1,62 @@
+'use client';
+
 import { Inter, Bebas_Neue } from 'next/font/google';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { FavouritesProvider, useFavourites } from '@/lib/FavouritesContext';
+import TeamPicker from '@/components/TeamPicker';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
 const bebas = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--font-display' });
 
-export const metadata = {
-  title: 'Football Tracker',
-  description: 'Arsenal, Chelsea and Bolton Wanderers — 2026/27 Season',
-  icons: {
-    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽</text></svg>',
-    apple: '/apple-touch-icon.png',
-  },
-};
+function AppShell({ children }) {
+  const { favourites, updateFavourites } = useFavourites();
+  const [showPicker, setShowPicker] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('fc_favourites');
+    if (!saved || JSON.parse(saved).length === 0) {
+      setShowPicker(true);
+    }
+    setReady(true);
+  }, []);
+
+  function handleSave(teams) {
+    updateFavourites(teams);
+    setShowPicker(false);
+  }
+
+  if (!ready) return null;
+
+  return (
+    <>
+      {showPicker && <TeamPicker onSave={handleSave} />}
+      <nav className="main-nav">
+        <Link href="/" className="nav-link">Fixtures</Link>
+        <Link href="/results" className="nav-link">Results</Link>
+        <Link href="/standings" className="nav-link">Tables</Link>
+        <Link href="/stats" className="nav-link">Stats</Link>
+        <button
+          className="nav-link nav-edit-teams"
+          onClick={() => setShowPicker(true)}
+        >
+          My Teams
+        </button>
+      </nav>
+      {children}
+    </>
+  );
+}
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${bebas.variable}`}>
       <body>
-        <nav className="main-nav">
-  <Link href="/" className="nav-link">Fixtures</Link>
-  <Link href="/results" className="nav-link">Results</Link>
-  <Link href="/standings" className="nav-link">Tables</Link>
-  <Link href="/stats" className="nav-link">Stats</Link>
-</nav>
-        {children}
+        <FavouritesProvider>
+          <AppShell>{children}</AppShell>
+        </FavouritesProvider>
       </body>
     </html>
   );

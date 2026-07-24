@@ -1,4 +1,4 @@
-import { TEAMS } from '@/lib/teams';
+import { ALL_TEAMS as TEAMS } from '@/lib/allTeams';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
@@ -120,30 +120,23 @@ export async function GET(request) {
     let filteredTeamMatchStats = teamMatchStats;
 
     if (competition !== 'all') {
-      // Map competition filter to actual competition codes
-      const compCodes = competition === 'CL' ? ['CL'] :
-                        competition === 'PL' ? ['PL'] :
-                        competition === 'ELC' ? ['ELC'] : null;
+      players = players.map(p => {
+        const compMatches = p.matches.filter(m => m.competition === competition);
+        if (compMatches.length === 0) return null;
+        return {
+          ...p,
+          matches: compMatches,
+          starts: compMatches.filter(m => m.started).length,
+          subApps: compMatches.filter(m => !m.started).length,
+          minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
+          goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
+          assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
+          yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
+          redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
+        };
+      }).filter(Boolean);
 
-      if (compCodes) {
-        players = players.map(p => {
-          const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
-          if (compMatches.length === 0) return null;
-          return {
-            ...p,
-            matches: compMatches,
-            starts: compMatches.filter(m => m.started).length,
-            subApps: compMatches.filter(m => !m.started).length,
-            minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
-            goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
-            assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
-            yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
-            redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
-          };
-        }).filter(Boolean);
-
-        filteredTeamMatchStats = teamMatchStats.filter(m => compCodes.includes(m.competition));
-      }
+      filteredTeamMatchStats = teamMatchStats.filter(m => m.competition === competition);
     }
 
     players.sort((a, b) =>
