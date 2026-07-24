@@ -1,8 +1,12 @@
 'use client';
 
-import { TEAMS } from '@/lib/teams';
+import { useFavourites } from '@/lib/FavouritesContext';
 
 export default function TeamSelector({ selectedTeam, onChange }) {
+  const { favourites, updateFavourites } = useFavourites();
+
+  if (favourites.length === 0) return null;
+
   return (
     <div className="team-selector-wrapper">
       <button
@@ -11,7 +15,7 @@ export default function TeamSelector({ selectedTeam, onChange }) {
       >
         All
       </button>
-      {TEAMS.map(t => (
+      {favourites.map(t => (
         <button
           key={t.id}
           className={`team-selector-btn ${selectedTeam === String(t.id) ? 'team-selector-active' : ''}`}
