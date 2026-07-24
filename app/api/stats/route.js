@@ -1,4 +1,4 @@
-import { TEAMS } from '@/lib/teams';
+import { ALL_TEAMS as TEAMS } from '@/lib/allTeams';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
@@ -14,9 +14,8 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// In-memory cache to avoid repeated Firestore reads
 const cache = new Map();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000;
 
 function aggregateTeamStats(matchStats) {
   if (!matchStats || matchStats.length === 0) return null;
@@ -87,7 +86,6 @@ export async function GET(request) {
   if (!team) return Response.json({ error: 'Team not found' }, { status: 404 });
 
   try {
-    // Check in-memory cache first
     const rawCacheKey = `raw_${teamId}`;
     let playerStats = {};
     let teamMatchStats = [];
@@ -97,7 +95,6 @@ export async function GET(request) {
       playerStats = cached.playerStats;
       teamMatchStats = cached.teamMatchStats;
     } else {
-      // Read from Firestore
       const docRef = doc(db, 'player_stats', rawCacheKey);
       const docSnap = await getDoc(docRef);
 
@@ -106,7 +103,6 @@ export async function GET(request) {
         playerStats = data.playerStats || {};
         teamMatchStats = data.teamMatchStats || [];
 
-        // Store in memory cache
         cache.set(rawCacheKey, {
           playerStats,
           teamMatchStats,
@@ -115,12 +111,10 @@ export async function GET(request) {
       }
     }
 
-    // Apply competition filter
     let players = Object.values(playerStats);
     let filteredTeamMatchStats = teamMatchStats;
 
     if (competition !== 'all') {
-      // Map competition filter to actual competition codes
       const compCodes = competition === 'CL' ? ['CL'] :
                         competition === 'PL' ? ['PL'] :
                         competition === 'ELC' ? ['ELC'] : null;
