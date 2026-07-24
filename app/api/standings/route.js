@@ -6,12 +6,12 @@ export async function GET(request) {
 
   try {
     const res = await fetch(
-      `https://api.football-data.org/v4/competitions/${competition}/standings`,
-      {
-        headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY },
-        next: { revalidate: 300 },
-      }
-    );
+  `https://api.football-data.org/v4/competitions/${competition}/standings?season=2025`,
+  {
+    headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY },
+    next: { revalidate: 300 },
+  }
+);
 
     if (!res.ok) {
       return Response.json(
