@@ -1,35 +1,25 @@
+import { TEAMS } from '@/lib/teams';
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamId = searchParams.get('teamId');
-  const teamIds = searchParams.get('teamIds');
   const status = searchParams.get('status');
-  const dateFrom = searchParams.get('dateFrom');
-  const dateTo = searchParams.get('dateTo');
 
   try {
-    // Build list of team IDs to fetch
-    let ids = [];
-    if (teamId) {
-      ids = [parseInt(teamId)];
-    } else if (teamIds) {
-      ids = teamIds.split(',').map(Number);
-    }
+    // Find which competition(s) to fetch
+    const teamsToFetch = teamId
+      ? TEAMS.filter(t => t.id === parseInt(teamId))
+      : TEAMS;
 
-    if (ids.length === 0) {
-      return Response.json({ matches: [] });
-    }
+    // Get unique competitions needed
+    const competitions = [...new Set(teamsToFetch.map(t => t.competition))];
 
-    // Determine which competitions we need
-    // Fetch from both PL and ELC to cover all cases
-    const competitions = ['PL', 'ELC'];
-
-    const params = new URLSearchParams({ season: '2026' });
-    if (status) params.set('status', status);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
-
+    // Fetch matches from each competition
     const results = await Promise.all(
-      competitions.map(async comp => {
+      competitions.map(async (comp) => {
+        const params = new URLSearchParams({ season: '2026' });
+        if (status) params.set('status', status);
+
         const res = await fetch(
           `https://api.football-data.org/v4/competitions/${comp}/matches?${params}`,
           {
@@ -43,25 +33,24 @@ export async function GET(request) {
       })
     );
 
-    // Flatten and filter to requested team IDs
-    const idSet = new Set(ids);
+    // Flatten and filter to only our tracked teams
+    const trackedIds = new Set(TEAMS.map(t => t.id));
     const allMatches = results.flat().filter(m =>
-      idSet.has(m.homeTeam?.id) || idSet.has(m.awayTeam?.id)
+      trackedIds.has(m.homeTeam?.id) || trackedIds.has(m.awayTeam?.id)
     );
 
-    // If single teamId, filter further
-    if (teamId) {
-      const tid = parseInt(teamId);
-      const filtered = allMatches.filter(m =>
-        m.homeTeam?.id === tid || m.awayTeam?.id === tid
-      );
-      filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-      return Response.json({ matches: filtered });
-    }
+    // If teamId specified, filter further
+    const filtered = teamId
+      ? allMatches.filter(m =>
+          m.homeTeam?.id === parseInt(teamId) ||
+          m.awayTeam?.id === parseInt(teamId)
+        )
+      : allMatches;
 
-    allMatches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-    return Response.json({ matches: allMatches });
+    // Sort by date
+    filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
 
+    return Response.json({ matches: filtered });
   } catch (err) {
     return Response.json({ error: 'Failed to fetch matches' }, { status: 500 });
   }
