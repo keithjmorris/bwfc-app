@@ -19,10 +19,14 @@ export async function GET() {
 
     return Response.json({
       projectId: config.projectId,
+      appId: config.appId?.substring(0, 20),
       docExists: docSnap.exists(),
-      hasApiKey: !!config.apiKey,
     });
   } catch (err) {
-    return Response.json({ error: err.message, code: err.code });
+    return Response.json({ 
+      error: err.message, 
+      code: err.code,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    });
   }
 }
