@@ -186,6 +186,7 @@ export default function StatsPage() {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [sortBy, setSortBy] = useState('apps');
+  const [season, setSeason] = useState('2026');
 
   useEffect(() => {
     if (favourites.length > 0 && !selectedTeam) {
@@ -205,7 +206,7 @@ export default function StatsPage() {
         const { db } = await import('@/lib/firebase');
         const { doc, getDoc } = await import('firebase/firestore');
         
-        const docRef = doc(db, 'player_stats', `raw_${selectedTeam.id}`);
+        const docRef = doc(db, 'player_stats', `raw_${selectedTeam.id}_${season}`);
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
@@ -319,7 +320,7 @@ export default function StatsPage() {
     }
 
     loadStats();
-  }, [selectedTeam, competition]);
+   }, [selectedTeam, competition, season]);
 
   const sorted = [...players].sort((a, b) => {
     if (sortBy === 'apps') return (b.starts + b.subApps) - (a.starts + a.subApps);
@@ -379,44 +380,58 @@ export default function StatsPage() {
       </div>
 
       {selectedTeam && (
-        <div className="stats-controls">
-          <div className="stats-team-name">
-            <img src={selectedTeam.crest} alt="" className="stats-team-crest" />
-            <span>{selectedTeam.name}</span>
-          </div>
-          <div className="stats-toggles">
-            <button
-              className={`stats-toggle ${competition === 'all' ? 'active' : ''}`}
-              onClick={() => setCompetition('all')}
-            >All</button>
-            <button
-  className={`stats-toggle ${competition === 'LEAGUE' ? 'active' : ''}`}
-  onClick={() => setCompetition('LEAGUE')}
->League</button>
-            {selectedTeam?.competition === 'PL' && (
-              <button
-                className={`stats-toggle ${competition === 'CL' ? 'active' : ''}`}
-                onClick={() => setCompetition('CL')}
-              >Champions League</button>
-            )}
-          </div>
-        </div>
-      )}
+  <div className="stats-controls">
+    <div className="stats-team-name">
+      <img src={selectedTeam.crest} alt="" className="stats-team-crest" />
+      <span>{selectedTeam.name}</span>
+    </div>
+    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+      <div className="stats-toggles">
+        <button
+          className={`stats-toggle ${season === '2026' ? 'active' : ''}`}
+          onClick={() => { setSeason('2026'); setCompetition('all'); }}
+        >2026/27</button>
+        <button
+          className={`stats-toggle ${season === '2025' ? 'active' : ''}`}
+          onClick={() => { setSeason('2025'); setCompetition('all'); }}
+        >2025/26</button>
+      </div>
+      <div className="stats-toggles">
+        <button
+          className={`stats-toggle ${competition === 'all' ? 'active' : ''}`}
+          onClick={() => setCompetition('all')}
+        >All</button>
+        <button
+          className={`stats-toggle ${competition === 'LEAGUE' ? 'active' : ''}`}
+          onClick={() => setCompetition('LEAGUE')}
+        >League</button>
+        {selectedTeam?.competition === 'PL' && (
+          <button
+            className={`stats-toggle ${competition === 'CL' ? 'active' : ''}`}
+            onClick={() => setCompetition('CL')}
+          >Champions League</button>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       <div className="content">
         {loading && <p className="state-msg">Loading player stats…</p>}
         {error && <p className="state-msg error">Could not load stats: {error}</p>}
         {!loading && !error && players.length === 0 && selectedTeam && (
-          <div className="state-msg">
-            <p>No stats available yet.</p>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
-              {selectedTeam?.competition === 'ELC'
-                ? `${selectedTeam.shortName} stats will be available once the Championship season starts on 9th August.`
-                : `${selectedTeam?.shortName} stats will be available once the season starts.`
-              }
-            </p>
-          </div>
-        )}
+  <div className="state-msg">
+    <p>No stats available yet for {season === '2026' ? '2026/27' : '2025/26'}.</p>
+    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+      {season === '2026'
+        ? selectedTeam?.competition === 'ELC'
+          ? `${selectedTeam.shortName} stats will be available once the Championship season starts on 9th August.`
+          : `${selectedTeam?.shortName} stats will be available once the 2026/27 season starts.`
+        : `No 2025/26 stats available for ${selectedTeam.shortName}.`
+      }
+    </p>
+  </div>
+)}
 
         {!loading && !error && players.length > 0 && (
           <>
