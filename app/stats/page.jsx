@@ -221,10 +221,10 @@ export default function StatsPage() {
         // Apply competition filter
         let players = Object.values(playerStats);
 
-        if (competition !== 'all') {
-          const compCodes = competition === 'CL' ? ['CL'] :
-                            competition === 'PL' ? ['PL'] :
-                            competition === 'ELC' ? ['ELC'] : null;
+        const compCodes = competition === 'CL' ? ['CL'] :
+                  competition === 'PL' ? ['PL'] :
+                  competition === 'ELC' ? ['ELC'] :
+                  competition === 'LEAGUE' ? ['PL', 'ELC', 'EL1', 'EL2'] : null;
 
           if (compCodes) {
             players = players.map(p => {
@@ -389,9 +389,9 @@ export default function StatsPage() {
               onClick={() => setCompetition('all')}
             >All</button>
             <button
-              className={`stats-toggle ${competition === selectedTeam?.competition ? 'active' : ''}`}
-              onClick={() => setCompetition(selectedTeam?.competition || 'PL')}
-            >League</button>
+  className={`stats-toggle ${competition === 'LEAGUE' ? 'active' : ''}`}
+  onClick={() => setCompetition('LEAGUE')}
+>League</button>
             {selectedTeam?.competition === 'PL' && (
               <button
                 className={`stats-toggle ${competition === 'CL' ? 'active' : ''}`}
