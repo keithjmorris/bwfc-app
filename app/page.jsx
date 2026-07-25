@@ -1,309 +1,329 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useFavourites } from '@/lib/FavouritesContext';
-import TeamSelector from '@/components/TeamSelector';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
-const LIVE_STATUSES = ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'];
-const POLL_INTERVAL = 30_000;
-
-function LiveMatchCard({ match }) {
-  const { favourites } = useFavourites();
-  const [detail, setDetail] = useState(null);
-
-  useEffect(() => {
-    async function fetchDetail() {
-      try {
-        const res = await fetch(`/api/match/${match.id}`);
-        const data = await res.json();
-        setDetail(data);
-      } catch {}
-    }
-    fetchDetail();
-  }, [match.id, match.minute]);
-
-  const m = detail || match;
-  const { homeTeam, awayTeam, score, minute, injuryTime, goals, bookings, substitutions } = m;
-  const homeScore = score?.fullTime?.home ?? 0;
-  const awayScore = score?.fullTime?.away ?? 0;
-  const halfTimeHome = score?.halfTime?.home;
-  const halfTimeAway = score?.halfTime?.away;
-
-  const homeGoals = goals?.filter(g => g.team?.id === homeTeam?.id) || [];
-  const awayGoals = goals?.filter(g => g.team?.id === awayTeam?.id) || [];
-  const homeBookings = bookings?.filter(b => b.team?.id === homeTeam?.id) || [];
-  const awayBookings = bookings?.filter(b => b.team?.id === awayTeam?.id) || [];
-  const homeSubs = substitutions?.filter(s => s.team?.id === homeTeam?.id) || [];
-  const awaySubs = substitutions?.filter(s => s.team?.id === awayTeam?.id) || [];
-
+function StatBadge({ value, type }) {
+  if (!value) return <span className="stat-zero">—</span>;
+  const colours = {
+    goal: '#16a34a',
+    assist: '#2563eb',
+    yellow: '#eab308',
+    red: '#dc2626',
+  };
   return (
-    <div className="live-match-card">
-      <div className="live-score-header">
-        <div className="live-team">
-          {homeTeam?.crest && <img src={homeTeam.crest} alt="" className="live-crest" />}
-          <span className="live-team-name">{homeTeam?.shortName || homeTeam?.name}</span>
-        </div>
-        <div className="live-score-centre">
-          <div className="live-score-display">
-            <span>{homeScore}</span>
-            <span className="live-score-sep">:</span>
-            <span>{awayScore}</span>
-          </div>
-          <div className="live-minute">
-            {minute}{injuryTime ? `+${injuryTime}` : ''}'
-          </div>
-          {halfTimeHome !== null && halfTimeHome !== undefined && (
-            <div className="live-ht">HT {halfTimeHome}–{halfTimeAway}</div>
-          )}
-        </div>
-        <div className="live-team live-team-away">
-          {awayTeam?.crest && <img src={awayTeam.crest} alt="" className="live-crest" />}
-          <span className="live-team-name">{awayTeam?.shortName || awayTeam?.name}</span>
-        </div>
-      </div>
-
-      {goals?.length > 0 && (
-        <div className="live-events">
-          <div className="live-events-two-col">
-            <div>
-              {homeGoals.map((g, i) => (
-                <div key={i} className="live-event">
-                  <span className="live-event-icon">⚽</span>
-                  <span className="live-event-text">
-                    {g.scorer?.name}
-                    {g.type === 'PENALTY' ? ' (pen)' : ''}
-                    {g.type === 'OWN' ? ' (og)' : ''}
-                  </span>
-                  <span className="live-event-min">{g.minute}'</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              {awayGoals.map((g, i) => (
-                <div key={i} className="live-event live-event-away">
-                  <span className="live-event-min">{g.minute}'</span>
-                  <span className="live-event-text">
-                    {g.scorer?.name}
-                    {g.type === 'PENALTY' ? ' (pen)' : ''}
-                    {g.type === 'OWN' ? ' (og)' : ''}
-                  </span>
-                  <span className="live-event-icon">⚽</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {bookings?.length > 0 && (
-        <div className="live-events">
-          <div className="live-events-section-title">Cards</div>
-          <div className="live-events-two-col">
-            <div>
-              {homeBookings.map((b, i) => (
-                <div key={i} className="live-event">
-                  <span className="live-event-icon">{b.card === 'RED' ? '🟥' : '🟨'}</span>
-                  <span className="live-event-text">{b.player?.name}</span>
-                  <span className="live-event-min">{b.minute}'</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              {awayBookings.map((b, i) => (
-                <div key={i} className="live-event live-event-away">
-                  <span className="live-event-min">{b.minute}'</span>
-                  <span className="live-event-text">{b.player?.name}</span>
-                  <span className="live-event-icon">{b.card === 'RED' ? '🟥' : '🟨'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {substitutions?.length > 0 && (
-        <div className="live-events">
-          <div className="live-events-section-title">Substitutions</div>
-          <div className="live-events-two-col">
-            <div>
-              {homeSubs.map((s, i) => (
-                <div key={i} className="live-event">
-                  <span className="live-event-icon">🔄</span>
-                  <span className="live-event-text">
-                    <span className="sub-in">▲ {s.playerIn?.name}</span>
-                    <span className="sub-out"> ▼ {s.playerOut?.name}</span>
-                  </span>
-                  <span className="live-event-min">{s.minute}'</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              {awaySubs.map((s, i) => (
-                <div key={i} className="live-event live-event-away">
-                  <span className="live-event-min">{s.minute}'</span>
-                  <span className="live-event-text">
-                    <span className="sub-in">▲ {s.playerIn?.name}</span>
-                    <span className="sub-out"> ▼ {s.playerOut?.name}</span>
-                  </span>
-                  <span className="live-event-icon">🔄</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(m.homeTeam?.lineup?.length > 0 || m.awayTeam?.lineup?.length > 0) && (
-        <div className="live-events">
-          <div className="live-events-section-title">Starting Lineups</div>
-          <div className="live-events-two-col">
-            <div>
-              <div className="lineup-team-name">
-                {homeTeam?.shortName} {homeTeam?.formation ? `(${homeTeam.formation})` : ''}
-              </div>
-              {m.homeTeam?.lineup?.map(p => (
-                <div key={p.id} className="lineup-player">
-                  <span className="lineup-shirt">{p.shirtNumber}</span>
-                  <span>{p.name}{p.position === 'Goalkeeper' ? ' 🧤' : ''}</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              <div className="lineup-team-name">
-                {awayTeam?.shortName} {awayTeam?.formation ? `(${awayTeam.formation})` : ''}
-              </div>
-              {m.awayTeam?.lineup?.map(p => (
-                <div key={p.id} className="lineup-player">
-                  <span className="lineup-shirt">{p.shirtNumber}</span>
-                  <span>{p.name}{p.position === 'Goalkeeper' ? ' 🧤' : ''}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(m.homeTeam?.bench?.length > 0 || m.awayTeam?.bench?.length > 0) && (
-        <div className="live-events">
-          <div className="live-events-section-title">Substitutes</div>
-          <div className="live-events-two-col">
-            <div>
-              {m.homeTeam?.bench?.map(p => (
-                <div key={p.id} className="lineup-player">
-                  <span className="lineup-shirt">{p.shirtNumber}</span>
-                  <span>{p.name}</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              {m.awayTeam?.bench?.map(p => (
-                <div key={p.id} className="lineup-player">
-                  <span className="lineup-shirt">{p.shirtNumber}</span>
-                  <span>{p.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    <span className="stat-badge" style={{ background: colours[type] || '#6b7280' }}>
+      {value}
+    </span>
   );
 }
 
-function UpcomingMatchCard({ match }) {
-  const { favourites } = useFavourites();
-  const trackedIds = new Set(favourites.map(t => t.id));
-  const homeTracked = trackedIds.has(match.homeTeam?.id);
-  const awayTracked = trackedIds.has(match.awayTeam?.id);
-
+function FormBadge({ result }) {
+  const colours = { W: '#16a34a', D: '#eab308', L: '#dc2626' };
   return (
-    <div className={`match-card ${homeTracked || awayTracked ? 'tracked' : ''}`}>
-      <div className="team-home">
-        {match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" className="team-crest" />}
-        <span className={`team-name ${homeTracked ? 'tracked-name' : ''}`}>
-          {match.homeTeam?.shortName || match.homeTeam?.name}
-        </span>
-      </div>
-      <div className="match-centre">
-        <div className="match-score">vs</div>
-        <div className="match-time">
-          {new Date(match.utcDate).toLocaleTimeString('en-GB', {
-            hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London'
-          })}
+    <span className="form-badge" style={{ background: colours[result] || '#6b7280' }}>
+      {result}
+    </span>
+  );
+}
+
+function TeamSeasonStats({ stats, team }) {
+  if (!stats) return null;
+  return (
+    <div className="team-season-stats">
+      <div className="team-season-header">
+        <img src={team?.crest} alt="" className="team-season-crest" />
+        <h2 className="team-season-title">Season Summary</h2>
+        <div className="team-form">
+          {stats.form?.map((r, i) => <FormBadge key={i} result={r} />)}
         </div>
-        <div className="match-competition">{match.competition?.name}</div>
       </div>
-      <div className="team-away">
-        {match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" className="team-crest" />}
-        <span className={`team-name ${awayTracked ? 'tracked-name' : ''}`}>
-          {match.awayTeam?.shortName || match.awayTeam?.name}
-        </span>
+      <div className="team-stats-grid">
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.played}</span>
+          <span className="team-stat-label">Played</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value" style={{ color: '#16a34a' }}>{stats.wins}</span>
+          <span className="team-stat-label">Won</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value" style={{ color: '#eab308' }}>{stats.draws}</span>
+          <span className="team-stat-label">Drawn</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value" style={{ color: '#dc2626' }}>{stats.losses}</span>
+          <span className="team-stat-label">Lost</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.goalsFor}</span>
+          <span className="team-stat-label">GF</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.goalsAgainst}</span>
+          <span className="team-stat-label">GA</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.goalDifference > 0 ? `+${stats.goalDifference}` : stats.goalDifference}</span>
+          <span className="team-stat-label">GD</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.cleanSheets}</span>
+          <span className="team-stat-label">Clean Sheets</span>
+        </div>
+      </div>
+      <div className="team-stats-divider">Performance Averages</div>
+      <div className="team-stats-grid">
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgPossession}%</span>
+          <span className="team-stat-label">Possession</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgShotsOnGoal}</span>
+          <span className="team-stat-label">Shots on Target</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgShots}</span>
+          <span className="team-stat-label">Total Shots</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgSaves}</span>
+          <span className="team-stat-label">Saves</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgCorners}</span>
+          <span className="team-stat-label">Corners</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value">{stats.avgFouls}</span>
+          <span className="team-stat-label">Fouls</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value" style={{ color: '#eab308' }}>{stats.totalYellowCards}</span>
+          <span className="team-stat-label">Yellow Cards</span>
+        </div>
+        <div className="team-stat-card">
+          <span className="team-stat-value" style={{ color: '#dc2626' }}>{stats.totalRedCards}</span>
+          <span className="team-stat-label">Red Cards</span>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function FixturesPage() {
+function PlayerRow({ player, isExpanded, onToggle }) {
+  const apps = player.starts + player.subApps;
+  return (
+    <>
+      <tr
+        className={`player-row ${isExpanded ? 'player-row-expanded' : ''}`}
+        onClick={onToggle}
+      >
+        <td className="player-name-col">
+          <span className="player-name">{player.name}</span>
+          <span className="player-position">{player.position}</span>
+        </td>
+        <td>{apps}</td>
+        <td>{player.starts}</td>
+        <td>{player.subApps}</td>
+        <td>{Math.round(player.minutesPlayed)}'</td>
+        <td><StatBadge value={player.goals} type="goal" /></td>
+        <td><StatBadge value={player.assists} type="assist" /></td>
+        <td><StatBadge value={player.yellowCards} type="yellow" /></td>
+        <td><StatBadge value={player.redCards} type="red" /></td>
+        <td className="expand-col">{isExpanded ? '▲' : '▼'}</td>
+      </tr>
+      {isExpanded && (
+        <tr className="player-detail-row">
+          <td colSpan="10">
+            <div className="player-matches">
+              <table className="player-match-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Opponent</th>
+                    <th>H/A</th>
+                    <th>Score</th>
+                    <th>Comp</th>
+                    <th>Mins</th>
+                    <th>Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {player.matches
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((m, i) => (
+                      <tr key={i}>
+                        <td>{new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</td>
+                        <td>{m.opponent}</td>
+                        <td>{m.homeAway}</td>
+                        <td>{m.score}</td>
+                        <td>{m.competition}</td>
+                        <td>{Math.round(m.minutesPlayed)}'</td>
+                        <td>{m.started ? 'Start' : `Sub ${m.cameOnMinute}'`}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function aggregateTeamStats(teamMatchStats) {
+  const count = teamMatchStats.length;
+  if (count === 0) return null;
+
+  const totals = teamMatchStats.reduce((acc, m) => ({
+    wins: acc.wins + (m.result === 'W' ? 1 : 0),
+    draws: acc.draws + (m.result === 'D' ? 1 : 0),
+    losses: acc.losses + (m.result === 'L' ? 1 : 0),
+    goalsFor: acc.goalsFor + m.goalsFor,
+    goalsAgainst: acc.goalsAgainst + m.goalsAgainst,
+    cleanSheets: acc.cleanSheets + (m.cleanSheet ? 1 : 0),
+    possession: acc.possession + m.possession,
+    shotsOnGoal: acc.shotsOnGoal + m.shotsOnGoal,
+    shotsOffGoal: acc.shotsOffGoal + m.shotsOffGoal,
+    shots: acc.shots + m.shots,
+    saves: acc.saves + m.saves,
+    corners: acc.corners + m.corners,
+    fouls: acc.fouls + m.fouls,
+    yellowCards: acc.yellowCards + m.yellowCards,
+    redCards: acc.redCards + m.redCards,
+  }), {
+    wins: 0, draws: 0, losses: 0,
+    goalsFor: 0, goalsAgainst: 0, cleanSheets: 0,
+    possession: 0, shotsOnGoal: 0, shotsOffGoal: 0,
+    shots: 0, saves: 0, corners: 0, fouls: 0,
+    yellowCards: 0, redCards: 0,
+  });
+
+  const form = [...teamMatchStats]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5)
+    .map(m => m.result)
+    .reverse();
+
+  return {
+    played: count,
+    wins: totals.wins,
+    draws: totals.draws,
+    losses: totals.losses,
+    goalsFor: totals.goalsFor,
+    goalsAgainst: totals.goalsAgainst,
+    goalDifference: totals.goalsFor - totals.goalsAgainst,
+    cleanSheets: totals.cleanSheets,
+    points: totals.wins * 3 + totals.draws,
+    pointsPerGame: ((totals.wins * 3 + totals.draws) / count).toFixed(2),
+    avgPossession: Math.round(totals.possession / count),
+    avgShotsOnGoal: (totals.shotsOnGoal / count).toFixed(1),
+    avgShots: (totals.shots / count).toFixed(1),
+    avgSaves: (totals.saves / count).toFixed(1),
+    avgCorners: (totals.corners / count).toFixed(1),
+    avgFouls: (totals.fouls / count).toFixed(1),
+    totalYellowCards: totals.yellowCards,
+    totalRedCards: totals.redCards,
+    form,
+  };
+}
+
+export default function StatsPage() {
   const { favourites } = useFavourites();
-  const [liveMatches, setLiveMatches] = useState([]);
-  const [upcomingMatches, setUpcomingMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [competition, setCompetition] = useState('all');
+  const [players, setPlayers] = useState([]);
+  const [teamStats, setTeamStats] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState('all');
-  const intervalRef = useRef(null);
-
-  async function fetchMatches() {
-    if (favourites.length === 0) return;
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const teamIds = favourites.map(t => t.id);
-
-      // Build URL based on selection
-      const baseParams = selectedTeam === 'all'
-        ? `teamIds=${teamIds.join(',')}`
-        : `teamId=${selectedTeam}`;
-
-      const [todayRes, upcomingRes] = await Promise.all([
-        fetch(`/api/matches?${baseParams}&dateFrom=${today}&dateTo=${today}`),
-        fetch(`/api/matches?${baseParams}`),
-      ]);
-
-      const todayData = await todayRes.json();
-      const upcomingData = await upcomingRes.json();
-
-      const live = (todayData.matches || []).filter(m =>
-        LIVE_STATUSES.includes(m.status)
-      );
-
-      const upcoming = (upcomingData.matches || []).filter(m =>
-        m.status !== 'FINISHED' &&
-        m.status !== 'AWARDED' &&
-        m.status !== 'CANCELLED' &&
-        !LIVE_STATUSES.includes(m.status)
-      );
-
-      setLiveMatches(live);
-      setUpcomingMatches(upcoming);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [expanded, setExpanded] = useState(null);
+  const [sortBy, setSortBy] = useState('apps');
 
   useEffect(() => {
-    if (favourites.length === 0) return;
-    fetchMatches();
-    intervalRef.current = setInterval(fetchMatches, POLL_INTERVAL);
-    return () => clearInterval(intervalRef.current);
-  }, [selectedTeam, favourites]);
+    if (favourites.length > 0 && !selectedTeam) {
+      setSelectedTeam(favourites[0]);
+    }
+  }, [favourites]);
 
-  const grouped = upcomingMatches.reduce((acc, match) => {
-    const date = match.utcDate.split('T')[0];
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(match);
-    return acc;
-  }, {});
+  useEffect(() => {
+    if (!selectedTeam) return;
+    setLoading(true);
+    setError(null);
+    setExpanded(null);
+    setTeamStats(null);
+
+    async function loadStats() {
+      try {
+        const docRef = doc(db, 'player_stats', `raw_${selectedTeam.id}`);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          setPlayers([]);
+          setTeamStats(null);
+          setLoading(false);
+          return;
+        }
+
+        const data = docSnap.data();
+        let playerStats = data.playerStats || {};
+        let teamMatchStats = data.teamMatchStats || [];
+
+        let players = Object.values(playerStats);
+
+        if (competition !== 'all') {
+          const compCodes = competition === 'CL' ? ['CL'] :
+                            competition === 'PL' ? ['PL'] :
+                            competition === 'ELC' ? ['ELC'] : null;
+
+          if (compCodes) {
+            players = players.map(p => {
+              const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
+              if (compMatches.length === 0) return null;
+              return {
+                ...p,
+                matches: compMatches,
+                starts: compMatches.filter(m => m.started).length,
+                subApps: compMatches.filter(m => !m.started).length,
+                minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
+                goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
+                assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
+                yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
+                redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
+              };
+            }).filter(Boolean);
+            teamMatchStats = teamMatchStats.filter(m => compCodes.includes(m.competition));
+          }
+        }
+
+        players.sort((a, b) =>
+          (b.starts + b.subApps) - (a.starts + a.subApps) ||
+          a.name.localeCompare(b.name)
+        );
+
+        setPlayers(players);
+        setTeamStats(aggregateTeamStats(teamMatchStats));
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadStats();
+  }, [selectedTeam, competition]);
+
+  const sorted = [...players].sort((a, b) => {
+    if (sortBy === 'apps') return (b.starts + b.subApps) - (a.starts + a.subApps);
+    if (sortBy === 'goals') return b.goals - a.goals;
+    if (sortBy === 'assists') return b.assists - a.assists;
+    if (sortBy === 'minutes') return b.minutesPlayed - a.minutesPlayed;
+    if (sortBy === 'cards') return (b.yellowCards + b.redCards) - (a.yellowCards + a.redCards);
+    return 0;
+  });
 
   return (
     <main>
@@ -315,53 +335,124 @@ export default function FixturesPage() {
             ))}
           </div>
           <div>
-            <h1 className="site-title">Bolton Wanderers</h1>
-<p className="site-subtitle">2026/27 Season</p>
+            <h1 className="site-title">Player Stats</h1>
+            <p className="site-subtitle">2026/27 Season</p>
           </div>
         </div>
       </header>
 
-      <TeamSelector
-        selectedTeam={selectedTeam}
-        onChange={val => {
-          setSelectedTeam(val);
-          setLoading(true);
-        }}
-      />
+      <div className="stats-team-tabs">
+        {favourites.map(t => (
+          <button
+            key={t.id}
+            className={`stats-team-tab ${selectedTeam?.id === t.id ? 'active' : ''}`}
+            style={selectedTeam?.id === t.id ? { borderBottomColor: t.color, color: 'white' } : {}}
+            onClick={() => {
+              setSelectedTeam(t);
+              setPlayers([]);
+              setTeamStats(null);
+              setExpanded(null);
+            }}
+          >
+            <div style={{ width: 32, height: 32, flexShrink: 0, overflow: 'hidden' }}>
+              <img
+                src={t.crest}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'contain', maxWidth: 32, maxHeight: 32 }}
+              />
+            </div>
+            <span>{t.shortName}</span>
+          </button>
+        ))}
+      </div>
+
+      {selectedTeam && (
+        <div className="stats-controls">
+          <div className="stats-team-name">
+            <img src={selectedTeam.crest} alt="" className="stats-team-crest" />
+            <span>{selectedTeam.name}</span>
+          </div>
+          <div className="stats-toggles">
+            <button
+              className={`stats-toggle ${competition === 'all' ? 'active' : ''}`}
+              onClick={() => setCompetition('all')}
+            >All</button>
+            <button
+              className={`stats-toggle ${competition === selectedTeam?.competition ? 'active' : ''}`}
+              onClick={() => setCompetition(selectedTeam?.competition || 'PL')}
+            >League</button>
+            {selectedTeam?.competition === 'PL' && (
+              <button
+                className={`stats-toggle ${competition === 'CL' ? 'active' : ''}`}
+                onClick={() => setCompetition('CL')}
+              >Champions League</button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="content">
-        {loading && <p className="state-msg">Loading…</p>}
-        {error && <p className="state-msg error">Could not load fixtures: {error}</p>}
+        {loading && <p className="state-msg">Loading player stats…</p>}
+        {error && <p className="state-msg error">Could not load stats: {error}</p>}
+        {!loading && !error && players.length === 0 && selectedTeam && (
+          <div className="state-msg">
+            <p>No stats available yet.</p>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+              {selectedTeam?.competition === 'ELC'
+                ? `${selectedTeam.shortName} stats will be available once the Championship season starts on 9th August.`
+                : `${selectedTeam?.shortName} stats will be available once the season starts.`
+              }
+            </p>
+          </div>
+        )}
 
-        {!loading && !error && (
+        {!loading && !error && players.length > 0 && (
           <>
-            {liveMatches.length > 0 && (
-              <section className="live-section">
-                <h2 className="live-section-title">🔴 Live Now</h2>
-                {liveMatches.map(match => (
-                  <LiveMatchCard key={match.id} match={match} />
-                ))}
-              </section>
-            )}
-
-            {upcomingMatches.length === 0 && liveMatches.length === 0 && (
-              <p className="state-msg">No upcoming fixtures found.</p>
-            )}
-
-            {Object.entries(grouped).sort().map(([date, dayMatches]) => (
-              <section key={date} className="day-group">
-                <h2 className="day-label">
-                  {new Date(date + 'T12:00:00').toLocaleDateString('en-GB', {
-                    weekday: 'long', day: 'numeric', month: 'long'
-                  })}
-                </h2>
-                <div className="match-list">
-                  {dayMatches.map(match => (
-                    <UpcomingMatchCard key={match.id} match={match} />
+            <TeamSeasonStats stats={teamStats} team={selectedTeam} />
+            <div className="sort-controls">
+              <span className="sort-label">Sort by:</span>
+              {[
+                { key: 'apps', label: 'Apps' },
+                { key: 'goals', label: 'Goals' },
+                { key: 'assists', label: 'Assists' },
+                { key: 'minutes', label: 'Minutes' },
+                { key: 'cards', label: 'Cards' },
+              ].map(s => (
+                <button
+                  key={s.key}
+                  className={`sort-btn ${sortBy === s.key ? 'active' : ''}`}
+                  onClick={() => setSortBy(s.key)}
+                >{s.label}</button>
+              ))}
+            </div>
+            <div className="stats-table-wrapper">
+              <table className="stats-table">
+                <thead>
+                  <tr>
+                    <th className="player-name-col">Player</th>
+                    <th title="Appearances">App</th>
+                    <th title="Starts">Sta</th>
+                    <th title="Sub appearances">Sub</th>
+                    <th title="Minutes played">Min</th>
+                    <th title="Goals">⚽</th>
+                    <th title="Assists">🅰️</th>
+                    <th title="Yellow cards">🟨</th>
+                    <th title="Red cards">🟥</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map(player => (
+                    <PlayerRow
+                      key={player.id}
+                      player={player}
+                      isExpanded={expanded === player.id}
+                      onToggle={() => setExpanded(expanded === player.id ? null : player.id)}
+                    />
                   ))}
-                </div>
-              </section>
-            ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>
