@@ -244,7 +244,7 @@ export default function StatsPage() {
               };
             }).filter(Boolean);
             teamMatchStats = teamMatchStats.filter(m => compCodes.includes(m.competition));
-          }
+          
         }
 
         players.sort((a, b) =>
