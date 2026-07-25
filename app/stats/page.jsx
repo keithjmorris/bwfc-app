@@ -200,15 +200,124 @@ export default function StatsPage() {
     setExpanded(null);
     setTeamStats(null);
 
-    fetch(`/api/stats?teamId=${selectedTeam.id}&competition=${competition}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        setPlayers(data.players || []);
-        setTeamStats(data.teamStats || null);
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    async function loadStats() {
+      try {
+        const { db } = await import('@/lib/firebase');
+        const { doc, getDoc } = await import('firebase/firestore');
+        
+        const docRef = doc(db, 'player_stats', `raw_${selectedTeam.id}`);
+        const docSnap = await getDoc(docRef);
+        
+        if (!docSnap.exists()) {
+          setPlayers([]);
+          setTeamStats(null);
+          return;
+        }
+
+        const data = docSnap.data();
+        let playerStats = data.playerStats || {};
+        let teamMatchStats = data.teamMatchStats || [];
+
+        // Apply competition filter
+        let players = Object.values(playerStats);
+
+        if (competition !== 'all') {
+          const compCodes = competition === 'CL' ? ['CL'] :
+                            competition === 'PL' ? ['PL'] :
+                            competition === 'ELC' ? ['ELC'] : null;
+
+          if (compCodes) {
+            players = players.map(p => {
+              const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
+              if (compMatches.length === 0) return null;
+              return {
+                ...p,
+                matches: compMatches,
+                starts: compMatches.filter(m => m.started).length,
+                subApps: compMatches.filter(m => !m.started).length,
+                minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
+                goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
+                assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
+                yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
+                redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
+              };
+            }).filter(Boolean);
+            teamMatchStats = teamMatchStats.filter(m => compCodes.includes(m.competition));
+          }
+        }
+
+        players.sort((a, b) =>
+          (b.starts + b.subApps) - (a.starts + a.subApps) ||
+          a.name.localeCompare(b.name)
+        );
+
+        // Aggregate team stats
+        const count = teamMatchStats.length;
+        let teamStats = null;
+        if (count > 0) {
+          const totals = teamMatchStats.reduce((acc, m) => ({
+            wins: acc.wins + (m.result === 'W' ? 1 : 0),
+            draws: acc.draws + (m.result === 'D' ? 1 : 0),
+            losses: acc.losses + (m.result === 'L' ? 1 : 0),
+            goalsFor: acc.goalsFor + m.goalsFor,
+            goalsAgainst: acc.goalsAgainst + m.goalsAgainst,
+            cleanSheets: acc.cleanSheets + (m.cleanSheet ? 1 : 0),
+            possession: acc.possession + m.possession,
+            shotsOnGoal: acc.shotsOnGoal + m.shotsOnGoal,
+            shotsOffGoal: acc.shotsOffGoal + m.shotsOffGoal,
+            shots: acc.shots + m.shots,
+            saves: acc.saves + m.saves,
+            corners: acc.corners + m.corners,
+            fouls: acc.fouls + m.fouls,
+            yellowCards: acc.yellowCards + m.yellowCards,
+            redCards: acc.redCards + m.redCards,
+          }), {
+            wins: 0, draws: 0, losses: 0,
+            goalsFor: 0, goalsAgainst: 0, cleanSheets: 0,
+            possession: 0, shotsOnGoal: 0, shotsOffGoal: 0,
+            shots: 0, saves: 0, corners: 0, fouls: 0,
+            yellowCards: 0, redCards: 0,
+          });
+
+          const form = [...teamMatchStats]
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 5)
+            .map(m => m.result)
+            .reverse();
+
+          teamStats = {
+            played: count,
+            wins: totals.wins,
+            draws: totals.draws,
+            losses: totals.losses,
+            goalsFor: totals.goalsFor,
+            goalsAgainst: totals.goalsAgainst,
+            goalDifference: totals.goalsFor - totals.goalsAgainst,
+            cleanSheets: totals.cleanSheets,
+            points: totals.wins * 3 + totals.draws,
+            pointsPerGame: ((totals.wins * 3 + totals.draws) / count).toFixed(2),
+            avgPossession: Math.round(totals.possession / count),
+            avgShotsOnGoal: (totals.shotsOnGoal / count).toFixed(1),
+            avgShots: (totals.shots / count).toFixed(1),
+            avgSaves: (totals.saves / count).toFixed(1),
+            avgCorners: (totals.corners / count).toFixed(1),
+            avgFouls: (totals.fouls / count).toFixed(1),
+            totalYellowCards: totals.yellowCards,
+            totalRedCards: totals.redCards,
+            form,
+          };
+        }
+
+        setPlayers(players);
+        setTeamStats(teamStats);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadStats();
   }, [selectedTeam, competition]);
 
   const sorted = [...players].sort((a, b) => {
