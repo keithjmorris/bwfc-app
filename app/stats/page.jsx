@@ -221,6 +221,7 @@ export default function StatsPage() {
         // Apply competition filter
         let players = Object.values(playerStats);
 
+        console.log('Competition filter:', competition);
         const compCodes = competition === 'CL' ? ['CL'] :
                   competition === 'PL' ? ['PL'] :
                   competition === 'ELC' ? ['ELC'] :
