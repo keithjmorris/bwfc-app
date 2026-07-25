@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import MatchStats from '@/components/MatchStats';
-import { TEAMS } from '@/lib/teams';
+import { ALL_TEAMS as TEAMS } from '@/lib/allTeams';
 
 function CardIcon({ type }) {
   const colour = type === 'RED' ? '#dc2626' : type === 'YELLOW_RED' ? '#f97316' : '#eab308';
