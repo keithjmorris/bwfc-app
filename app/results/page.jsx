@@ -234,7 +234,7 @@ async function fetchBoltonHistoricResults() {
       _boltonHistoric: true,
     };
   });
-}}
+}
 
 export default function ResultsPage() {
   const { favourites } = useFavourites();
