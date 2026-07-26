@@ -23,8 +23,10 @@ export async function GET(request) {
     // Fetch from both PL and ELC to cover all cases
     const competitions = ['PL', 'ELC'];
 
-    const currentDate = new Date();
-const season = currentDate >= new Date('2026-08-09') ? '2026' : '2025';
+    const seasonParam = searchParams.get('season');
+const currentDate = new Date();
+const defaultSeason = currentDate >= new Date('2026-08-09') ? '2026' : '2025';
+const season = seasonParam || defaultSeason;
 const params = new URLSearchParams({ season });
     if (status) params.set('status', status);
     if (dateFrom) params.set('dateFrom', dateFrom);

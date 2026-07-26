@@ -264,8 +264,8 @@ export default function FixturesPage() {
         : `teamId=${selectedTeam}`;
 
       const [todayRes, upcomingRes] = await Promise.all([
-        fetch(`/api/matches?${baseParams}&dateFrom=${today}&dateTo=${today}`),
-        fetch(`/api/matches?${baseParams}`),
+        fetch(`/api/matches?${baseParams}&dateFrom=${today}&dateTo=${today}&season=2026`),
+        fetch(`/api/matches?${baseParams}&season=2026`),
       ]);
 
       const todayData = await todayRes.json();
