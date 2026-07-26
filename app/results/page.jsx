@@ -84,6 +84,149 @@ function MatchSummary({ match }) {
   );
 }
 
+async function fetchBoltonHistoricResults() {
+  const res = await fetch('https://raw.githubusercontent.com/keithjmorris/bwfc-web/refs/heads/main/src/data/fixtures.json');
+  const fixtures = await res.json();
+  
+  // Convert to display format
+  return fixtures.map(m => {
+    const isHome = m.homeOrAway?.toLowerCase() === 'home';
+    const homeScore = isHome ? m.BWFCScore : m.opponentScore;
+    const awayScore = isHome ? m.opponentScore : m.BWFCScore;
+    const homeTeam = isHome ? 'Bolton Wanderers' : m.opponent;
+    const awayTeam = isHome ? m.opponent : 'Bolton Wanderers';
+
+    // Get scorers
+    const goals = [];
+    for (let i = 1; i <= 8; i++) {
+      const scorer = m[`scorer${i}`];
+      const assist = m[`assist${i}`];
+      if (scorer && scorer.trim()) {
+        // Parse "M. Burstow (60')" 
+        const match = scorer.match(/^(.+?)\s*\((.+?)\)/);
+        if (match) {
+          const assistMatch = assist?.match(/^(.+?)\s*\((.+?)\)/);
+          goals.push({
+            scorer: { name: match[1].trim() },
+            assist: assistMatch ? { name: assistMatch[1].trim() } : null,
+            minute: parseInt(match[2]) || 0,
+            team: { name: 'Bolton Wanderers' },
+            type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
+          });
+        }
+      }
+    }
+
+    // Get bookings
+    const bookings = [];
+    for (let i = 1; i <= 6; i++) {
+      const player = m[`yellowCard${i}`];
+      const time = m[`yellowCardTime${i}`];
+      if (player && player.trim()) {
+        bookings.push({
+          player: { name: player.trim() },
+          minute: parseInt(time) || 0,
+          card: 'YELLOW',
+          team: { name: 'Bolton Wanderers' },
+        });
+      }
+    }
+    for (let i = 1; i <= 2; i++) {
+      const player = m[`redCard${i}`];
+      const time = m[`redCardTime${i}`];
+      if (player && player.trim()) {
+        bookings.push({
+          player: { name: player.trim() },
+          minute: parseInt(time) || 0,
+          card: 'RED',
+          team: { name: 'Bolton Wanderers' },
+        });
+      }
+    }
+
+    // Get substitutions
+    const substitutions = [];
+    for (let i = 1; i <= 5; i++) {
+      const playerIn = m[`substitute${i}`];
+      const playerOut = m[`substitutedPlayer${i}`];
+      const time = m[`substituteTime${i}`];
+      if (playerIn && playerIn.trim() && playerOut && playerOut.trim()) {
+        substitutions.push({
+          playerIn: { name: playerIn.trim() },
+          playerOut: { name: playerOut.trim() },
+          minute: parseInt(time) || 0,
+          team: { name: 'Bolton Wanderers' },
+        });
+      }
+    }
+
+    // Get lineup
+    const lineup = [];
+    for (let i = 1; i <= 11; i++) {
+      const player = m[`starter${i}`];
+      if (player && player.trim()) {
+        lineup.push({ id: i, name: player.trim(), shirtNumber: i, position: i === 1 ? 'Goalkeeper' : 'Outfield' });
+      }
+    }
+
+    return {
+      id: m.id,
+      utcDate: new Date(m.date + ' 2025').toISOString(),
+      status: 'FINISHED',
+      competition: { name: m.competition, code: 'EL1' },
+      homeTeam: {
+        id: isHome ? 60 : 999,
+        name: homeTeam,
+        shortName: isHome ? 'Bolton' : m.opponent,
+        crest: isHome ? 'https://crests.football-data.org/60.png' : null,
+        lineup: isHome ? lineup : [],
+        bench: [],
+        formation: null,
+        statistics: {
+          ball_possession: m.possession || 0,
+          shots_on_goal: m.shotsonTarget || 0,
+          shots_off_goal: (m.shots || 0) - (m.shotsonTarget || 0),
+          shots: m.shots || 0,
+          saves: 0,
+          corner_kicks: 0,
+          fouls: 0,
+          offsides: 0,
+        },
+      },
+      awayTeam: {
+        id: isHome ? 999 : 60,
+        name: awayTeam,
+        shortName: isHome ? m.opponent : 'Bolton',
+        crest: isHome ? null : 'https://crests.football-data.org/60.png',
+        lineup: isHome ? [] : lineup,
+        bench: [],
+        formation: null,
+        statistics: {
+          ball_possession: m.possession ? 100 - m.possession : 0,
+          shots_on_goal: m.oppositionShotonTarget || 0,
+          shots_off_goal: (m.oppositionShots || 0) - (m.oppositionShotonTarget || 0),
+          shots: m.oppositionShots || 0,
+          saves: 0,
+          corner_kicks: 0,
+          fouls: 0,
+          offsides: 0,
+        },
+      },
+      score: {
+        fullTime: { home: homeScore, away: awayScore },
+        halfTime: { home: null, away: null },
+      },
+      goals,
+      bookings,
+      substitutions,
+      venue: isHome ? 'University of Bolton Stadium' : m.opponent,
+      attendance: null,
+      referees: [],
+      _boltonHistoric: true,
+    };
+  });
+}
+
 export default function ResultsPage() {
   const { favourites } = useFavourites();
   const [matches, setMatches] = useState([]);
@@ -92,17 +235,22 @@ export default function ResultsPage() {
   const [selectedTeam, setSelectedTeam] = useState('all');
 
   useEffect(() => {
-    if (favourites.length === 0) return;
     async function fetchResults() {
       try {
-        const teamIds = favourites.map(t => t.id);
         const url = selectedTeam === 'all'
-          ? `/api/matches?teamIds=${teamIds.join(',')}&status=FINISHED`
+          ? `/api/matches?teamIds=${favourites.map(t => t.id).join(',')}&status=FINISHED`
           : `/api/matches?teamId=${selectedTeam}&status=FINISHED`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch results');
         const data = await res.json();
-        setMatches(data.matches || []);
+        let matches = data.matches || [];
+
+        // Bolton has no API data for 2025/26 — use historic JSON
+        if (matches.length === 0 && String(selectedTeam) === '60') {
+          matches = await fetchBoltonHistoricResults();
+        }
+
+        setMatches(matches);
       } catch (err) {
         setError(err.message);
       } finally {
