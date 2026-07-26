@@ -59,6 +59,14 @@ export default function MatchDetails({ match }) {
     if (open) { setOpen(false); return; }
     setOpen(true);
     if (fullMatch) return;
+
+    // Bolton historic matches have _boltonHistoric flag
+    // or small numeric IDs — use match data directly
+    if (match._boltonHistoric || match.id < 1000) {
+      setFullMatch(match);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`/api/match/${match.id}`);
