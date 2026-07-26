@@ -87,80 +87,43 @@ function MatchSummary({ match }) {
 async function fetchBoltonHistoricResults() {
   const res = await fetch('https://raw.githubusercontent.com/keithjmorris/bwfc-web/refs/heads/main/src/data/fixtures.json');
   const fixtures = await res.json();
-  
-  // Convert to display format
+
   return fixtures.map(m => {
     const isHome = m.homeOrAway?.toLowerCase() === 'home';
     const homeScore = isHome ? m.BWFCScore : m.opponentScore;
     const awayScore = isHome ? m.opponentScore : m.BWFCScore;
-    const homeTeam = isHome ? 'Bolton Wanderers' : m.opponent;
-    const awayTeam = isHome ? m.opponent : 'Bolton Wanderers';
 
-    // Get scorers
-const goals = [];
-for (let i = 1; i <= 8; i++) {
-  const scorer = m[`scorer${i}`];
-  const assist = m[`assist${i}`];
-  if (scorer && scorer.trim()) {
-    const match = scorer.match(/^(.+?)\s*\((.+?)\)/);
-    if (match) {
-      const assistMatch = assist?.match(/^(.+?)\s*\((.+?)\)/);
-      goals.push({
-        scorer: { name: match[1].trim() },
-        assist: assistMatch ? { name: assistMatch[1].trim() } : null,
-        minute: parseInt(match[2]) || 0,
-        team: { id: 60, name: 'Bolton Wanderers' },
-        type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
-      });
+    // Parse date
+    const utcDate = (() => {
+      try {
+        const cleaned = m.date.replace(/(\d+)(st|nd|rd|th)/i, '$1').trim();
+        const withYear = cleaned.includes('2025') || cleaned.includes('2026') ? cleaned : cleaned + ' 2025';
+        const d = new Date(withYear);
+        return isNaN(d.getTime()) ? new Date('2025-08-01').toISOString() : d.toISOString();
+      } catch { return new Date('2025-08-01').toISOString(); }
+    })();
+
+    // Goals
+    const goals = [];
+    for (let i = 1; i <= 8; i++) {
+      const scorer = m[`scorer${i}`];
+      const assist = m[`assist${i}`];
+      if (scorer && scorer.trim()) {
+        const sm = scorer.match(/^(.+?)\s*\((.+?)\)/);
+        if (sm) {
+          const am = assist?.match(/^(.+?)\s*\((.+?)\)/);
+          goals.push({
+            scorer: { name: sm[1].trim() },
+            assist: am ? { name: am[1].trim() } : null,
+            minute: parseInt(sm[2]) || 0,
+            team: { id: 60, name: 'Bolton Wanderers' },
+            type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
+          });
+        }
+      }
     }
-  }
 
-
-// Get bookings
-const bookings = [];
-for (let i = 1; i <= 6; i++) {
-  const player = m[`yellowCard${i}`];
-  const time = m[`yellowCardTime${i}`];
-  if (player && player.trim()) {
-    bookings.push({
-      player: { name: player.trim() },
-      minute: parseInt(time) || 0,
-      card: 'YELLOW',
-      team: { id: 60, name: 'Bolton Wanderers' },
-    });
-  }
-}
-for (let i = 1; i <= 2; i++) {
-  const player = m[`redCard${i}`];
-  const time = m[`redCardTime${i}`];
-  if (player && player.trim()) {
-    bookings.push({
-      player: { name: player.trim() },
-      minute: parseInt(time) || 0,
-      card: 'RED',
-      team: { id: 60, name: 'Bolton Wanderers' },
-    });
-  }
-}
-
-// Get substitutions
-const substitutions = [];
-for (let i = 1; i <= 5; i++) {
-  const playerIn = m[`substitute${i}`];
-  const playerOut = m[`substitutedPlayer${i}`];
-  const time = m[`substituteTime${i}`];
-  if (playerIn && playerIn.trim() && playerOut && playerOut.trim()) {
-    substitutions.push({
-      playerIn: { name: playerIn.trim() },
-      playerOut: { name: playerOut.trim() },
-      minute: parseInt(time) || 0,
-      team: { id: 60, name: 'Bolton Wanderers' },
-    });
-  }
-}
-}
-
-    // Get bookings
+    // Bookings
     const bookings = [];
     for (let i = 1; i <= 6; i++) {
       const player = m[`yellowCard${i}`];
@@ -170,7 +133,7 @@ for (let i = 1; i <= 5; i++) {
           player: { name: player.trim() },
           minute: parseInt(time) || 0,
           card: 'YELLOW',
-          team: { name: 'Bolton Wanderers' },
+          team: { id: 60, name: 'Bolton Wanderers' },
         });
       }
     }
@@ -182,12 +145,12 @@ for (let i = 1; i <= 5; i++) {
           player: { name: player.trim() },
           minute: parseInt(time) || 0,
           card: 'RED',
-          team: { name: 'Bolton Wanderers' },
+          team: { id: 60, name: 'Bolton Wanderers' },
         });
       }
     }
 
-    // Get substitutions
+    // Substitutions
     const substitutions = [];
     for (let i = 1; i <= 5; i++) {
       const playerIn = m[`substitute${i}`];
@@ -198,12 +161,12 @@ for (let i = 1; i <= 5; i++) {
           playerIn: { name: playerIn.trim() },
           playerOut: { name: playerOut.trim() },
           minute: parseInt(time) || 0,
-          team: { name: 'Bolton Wanderers' },
+          team: { id: 60, name: 'Bolton Wanderers' },
         });
       }
     }
 
-    // Get lineup
+    // Lineup
     const lineup = [];
     for (let i = 1; i <= 11; i++) {
       const player = m[`starter${i}`];
@@ -212,27 +175,17 @@ for (let i = 1; i <= 5; i++) {
       }
     }
 
+    const boltonId = 60;
+    const opponentId = 999;
+
     return {
       id: m.id,
-      utcDate: (() => {
-  try {
-    const cleaned = m.date
-      .replace(/(\d+)(st|nd|rd|th)/i, '$1')
-      .trim();
-    const withYear = cleaned.includes('2025') || cleaned.includes('2026') 
-      ? cleaned 
-      : cleaned + ' 2025';
-    const d = new Date(withYear);
-    return isNaN(d.getTime()) ? new Date('2025-08-01').toISOString() : d.toISOString();
-  } catch {
-    return new Date('2025-08-01').toISOString();
-  }
-})(),
+      utcDate,
       status: 'FINISHED',
       competition: { name: m.competition, code: 'EL1' },
       homeTeam: {
-        id: isHome ? 60 : 999,
-        name: homeTeam,
+        id: isHome ? boltonId : opponentId,
+        name: isHome ? 'Bolton Wanderers' : m.opponent,
         shortName: isHome ? 'Bolton' : m.opponent,
         crest: isHome ? 'https://crests.football-data.org/60.png' : null,
         lineup: isHome ? lineup : [],
@@ -250,8 +203,8 @@ for (let i = 1; i <= 5; i++) {
         },
       },
       awayTeam: {
-        id: isHome ? 999 : 60,
-        name: awayTeam,
+        id: isHome ? opponentId : boltonId,
+        name: isHome ? m.opponent : 'Bolton Wanderers',
         shortName: isHome ? m.opponent : 'Bolton',
         crest: isHome ? null : 'https://crests.football-data.org/60.png',
         lineup: isHome ? [] : lineup,
@@ -281,7 +234,7 @@ for (let i = 1; i <= 5; i++) {
       _boltonHistoric: true,
     };
   });
-}
+}}
 
 export default function ResultsPage() {
   const { favourites } = useFavourites();
