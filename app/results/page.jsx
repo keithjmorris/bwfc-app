@@ -171,7 +171,20 @@ async function fetchBoltonHistoricResults() {
 
     return {
       id: m.id,
-      utcDate: new Date(m.date.replace(/(\d+)(st|nd|rd|th)/, '$1')).toISOString(),
+      utcDate: (() => {
+  try {
+    const cleaned = m.date
+      .replace(/(\d+)(st|nd|rd|th)/i, '$1')
+      .trim();
+    const withYear = cleaned.includes('2025') || cleaned.includes('2026') 
+      ? cleaned 
+      : cleaned + ' 2025';
+    const d = new Date(withYear);
+    return isNaN(d.getTime()) ? new Date('2025-08-01').toISOString() : d.toISOString();
+  } catch {
+    return new Date('2025-08-01').toISOString();
+  }
+})(),
       status: 'FINISHED',
       competition: { name: m.competition, code: 'EL1' },
       homeTeam: {
@@ -236,6 +249,8 @@ export default function ResultsPage() {
 
   useEffect(() => {
     async function fetchResults() {
+       setError(null);
+      setMatches([]);
       try {
         const url = selectedTeam === 'all'
           ? `/api/matches?teamIds=${favourites.map(t => t.id).join(',')}&status=FINISHED`
