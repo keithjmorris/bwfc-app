@@ -114,7 +114,7 @@ for (let i = 1; i <= 8; i++) {
       });
     }
   }
-}
+
 
 // Get bookings
 const bookings = [];
@@ -158,9 +158,7 @@ for (let i = 1; i <= 5; i++) {
     });
   }
 }
-        }
-      }
-    }
+}
 
     // Get bookings
     const bookings = [];
