@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useFavourites } from '@/lib/FavouritesContext';
 import MatchStats from '@/components/MatchStats';
 
@@ -244,6 +244,7 @@ export default function StatsPage() {
   const [expanded, setExpanded] = useState(null);
   const [sortBy, setSortBy] = useState('apps');
   const [season, setSeason] = useState('2026');
+  const rawDataCache = useRef({});
 
   useEffect(() => {
     if (favourites.length > 0 && !selectedTeam) {
@@ -260,6 +261,15 @@ export default function StatsPage() {
 
     async function loadStats() {
   try {
+    const cacheKey = `${selectedTeam.id}_${season}`;
+
+    // Check in-memory cache first (instant)
+    if (rawDataCache.current[cacheKey]) {
+      applyFilter(rawDataCache.current[cacheKey]);
+      return;
+    }
+
+    // Check localStorage next
     const localKey = `stats_${selectedTeam.id}_${season}`;
     const cached = localStorage.getItem(localKey);
 
@@ -270,43 +280,8 @@ export default function StatsPage() {
       const maxAge = isHistorical ? Infinity : 24 * 60 * 60 * 1000;
 
       if (cacheAge < maxAge) {
-        // Use localStorage cache
-        const { playerStats, teamMatchStats } = parsed.data;
-        let players = Object.values(playerStats);
-        let matchStats = teamMatchStats;
-
-        if (competition !== 'all') {
-          const compCodes = competition === 'CL' ? ['CL'] :
-                            competition === 'PL' ? ['PL'] :
-                            competition === 'ELC' ? ['ELC'] :
-                            competition === 'LEAGUE' ? ['PL', 'ELC', 'EL1', 'EL2'] : null;
-          if (compCodes) {
-            players = players.map(p => {
-              const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
-              if (compMatches.length === 0) return null;
-              return {
-                ...p,
-                matches: compMatches,
-                starts: compMatches.filter(m => m.started).length,
-                subApps: compMatches.filter(m => !m.started).length,
-                minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
-                goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
-                assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
-                yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
-                redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
-              };
-            }).filter(Boolean);
-            matchStats = matchStats.filter(m => compCodes.includes(m.competition));
-          }
-        }
-
-        players.sort((a, b) =>
-          (b.starts + b.subApps) - (a.starts + a.subApps) ||
-          a.name.localeCompare(b.name)
-        );
-
-        setPlayers(players);
-        setTeamStats(aggregateTeamStats(matchStats));
+        rawDataCache.current[cacheKey] = parsed.data;
+        applyFilter(parsed.data);
         return;
       }
     }
@@ -317,66 +292,72 @@ export default function StatsPage() {
     const docRef = doc(db, 'player_stats', `raw_${selectedTeam.id}_${season}`);
     const docSnap = await getDoc(docRef);
 
-    let playerStats = {};
-    let teamMatchStats = [];
+    let data = { playerStats: {}, teamMatchStats: [] };
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      playerStats = data.playerStats || {};
-      teamMatchStats = data.teamMatchStats || [];
+      const docData = docSnap.data();
+      data = {
+        playerStats: docData.playerStats || {},
+        teamMatchStats: docData.teamMatchStats || [],
+      };
     }
 
-    // Save to localStorage
+    // Store in memory and localStorage
+    rawDataCache.current[cacheKey] = data;
     try {
       localStorage.setItem(localKey, JSON.stringify({
-        data: { playerStats, teamMatchStats },
+        data,
         timestamp: Date.now(),
       }));
     } catch (e) {
       console.warn('localStorage full, skipping cache');
     }
 
-    // Apply competition filter
-    let players = Object.values(playerStats);
-
-    if (competition !== 'all') {
-      const compCodes = competition === 'CL' ? ['CL'] :
-                        competition === 'PL' ? ['PL'] :
-                        competition === 'ELC' ? ['ELC'] :
-                        competition === 'LEAGUE' ? ['PL', 'ELC', 'EL1', 'EL2'] : null;
-      if (compCodes) {
-        players = players.map(p => {
-          const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
-          if (compMatches.length === 0) return null;
-          return {
-            ...p,
-            matches: compMatches,
-            starts: compMatches.filter(m => m.started).length,
-            subApps: compMatches.filter(m => !m.started).length,
-            minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
-            goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
-            assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
-            yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
-            redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
-          };
-        }).filter(Boolean);
-        teamMatchStats = teamMatchStats.filter(m => compCodes.includes(m.competition));
-      }
-    }
-
-    players.sort((a, b) =>
-      (b.starts + b.subApps) - (a.starts + a.subApps) ||
-      a.name.localeCompare(b.name)
-    );
-
-    setPlayers(players);
-    setTeamStats(aggregateTeamStats(teamMatchStats));
+    applyFilter(data);
 
   } catch (err) {
     setError(err.message);
   } finally {
     setLoading(false);
   }
+}
+
+function applyFilter({ playerStats, teamMatchStats }) {
+  let players = Object.values(playerStats);
+  let matchStats = [...teamMatchStats];
+
+  if (competition !== 'all') {
+    const compCodes = competition === 'CL' ? ['CL'] :
+                      competition === 'PL' ? ['PL'] :
+                      competition === 'ELC' ? ['ELC'] :
+                      competition === 'LEAGUE' ? ['PL', 'ELC', 'EL1', 'EL2'] : null;
+    if (compCodes) {
+      players = players.map(p => {
+        const compMatches = p.matches.filter(m => compCodes.includes(m.competition));
+        if (compMatches.length === 0) return null;
+        return {
+          ...p,
+          matches: compMatches,
+          starts: compMatches.filter(m => m.started).length,
+          subApps: compMatches.filter(m => !m.started).length,
+          minutesPlayed: compMatches.reduce((s, m) => s + (m.minutesPlayed || 0), 0),
+          goals: compMatches.reduce((s, m) => s + (m.goals || 0), 0),
+          assists: compMatches.reduce((s, m) => s + (m.assists || 0), 0),
+          yellowCards: compMatches.reduce((s, m) => s + (m.yellowCards || 0), 0),
+          redCards: compMatches.reduce((s, m) => s + (m.redCards || 0), 0),
+        };
+      }).filter(Boolean);
+      matchStats = matchStats.filter(m => compCodes.includes(m.competition));
+    }
+  }
+
+  players.sort((a, b) =>
+    (b.starts + b.subApps) - (a.starts + a.subApps) ||
+    a.name.localeCompare(b.name)
+  );
+
+  setPlayers(players);
+  setTeamStats(aggregateTeamStats(matchStats));
 }
     loadStats();
    }, [selectedTeam, competition, season]);
