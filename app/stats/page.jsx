@@ -157,7 +157,14 @@ function PlayerRow({ player, isExpanded, onToggle }) {
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .map((m, i) => (
                       <tr key={i}>
-                        <td>{new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</td>
+                       <td>{(() => {
+  try {
+    const cleaned = m.date.replace(/(\d+)(st|nd|rd|th)/i, '$1').trim();
+    const withYear = cleaned.includes('2025') || cleaned.includes('2026') ? cleaned : cleaned + ' 2025';
+    const d = new Date(withYear);
+    return isNaN(d.getTime()) ? m.date : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  } catch { return m.date; }
+})()}</td>
                         <td>{m.opponent}</td>
                         <td>{m.homeAway}</td>
                         <td>{m.score}</td>
