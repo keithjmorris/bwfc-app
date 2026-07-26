@@ -176,6 +176,63 @@ function PlayerRow({ player, isExpanded, onToggle }) {
   );
 }
 
+function aggregateTeamStats(teamMatchStats) {
+  const count = teamMatchStats.length;
+  if (count === 0) return null;
+
+  const totals = teamMatchStats.reduce((acc, m) => ({
+    wins: acc.wins + (m.result === 'W' ? 1 : 0),
+    draws: acc.draws + (m.result === 'D' ? 1 : 0),
+    losses: acc.losses + (m.result === 'L' ? 1 : 0),
+    goalsFor: acc.goalsFor + m.goalsFor,
+    goalsAgainst: acc.goalsAgainst + m.goalsAgainst,
+    cleanSheets: acc.cleanSheets + (m.cleanSheet ? 1 : 0),
+    possession: acc.possession + m.possession,
+    shotsOnGoal: acc.shotsOnGoal + m.shotsOnGoal,
+    shotsOffGoal: acc.shotsOffGoal + m.shotsOffGoal,
+    shots: acc.shots + m.shots,
+    saves: acc.saves + m.saves,
+    corners: acc.corners + m.corners,
+    fouls: acc.fouls + m.fouls,
+    yellowCards: acc.yellowCards + m.yellowCards,
+    redCards: acc.redCards + m.redCards,
+  }), {
+    wins: 0, draws: 0, losses: 0,
+    goalsFor: 0, goalsAgainst: 0, cleanSheets: 0,
+    possession: 0, shotsOnGoal: 0, shotsOffGoal: 0,
+    shots: 0, saves: 0, corners: 0, fouls: 0,
+    yellowCards: 0, redCards: 0,
+  });
+
+  const form = [...teamMatchStats]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5)
+    .map(m => m.result)
+    .reverse();
+
+  return {
+    played: count,
+    wins: totals.wins,
+    draws: totals.draws,
+    losses: totals.losses,
+    goalsFor: totals.goalsFor,
+    goalsAgainst: totals.goalsAgainst,
+    goalDifference: totals.goalsFor - totals.goalsAgainst,
+    cleanSheets: totals.cleanSheets,
+    points: totals.wins * 3 + totals.draws,
+    pointsPerGame: ((totals.wins * 3 + totals.draws) / count).toFixed(2),
+    avgPossession: Math.round(totals.possession / count),
+    avgShotsOnGoal: (totals.shotsOnGoal / count).toFixed(1),
+    avgShots: (totals.shots / count).toFixed(1),
+    avgSaves: (totals.saves / count).toFixed(1),
+    avgCorners: (totals.corners / count).toFixed(1),
+    avgFouls: (totals.fouls / count).toFixed(1),
+    totalYellowCards: totals.yellowCards,
+    totalRedCards: totals.redCards,
+    form,
+  };
+}
+
 export default function StatsPage() {
   const { favourites } = useFavourites();
   const [selectedTeam, setSelectedTeam] = useState(null);
