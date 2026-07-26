@@ -113,6 +113,18 @@ async function fetchBoltonHistoricResults() {
             team: { name: 'Bolton Wanderers' },
             type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
           });
+          bookings.push({
+  player: { name: player.trim() },
+  minute: parseInt(time) || 0,
+  card: 'YELLOW',
+  team: { id: 60, name: 'Bolton Wanderers' },  // ← add this
+});
+substitutions.push({
+  playerIn: { name: playerIn.trim() },
+  playerOut: { name: playerOut.trim() },
+  minute: parseInt(time) || 0,
+  team: { id: 60, name: 'Bolton Wanderers' },  // ← add this
+});
         }
       }
     }
