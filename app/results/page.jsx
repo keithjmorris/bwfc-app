@@ -97,34 +97,67 @@ async function fetchBoltonHistoricResults() {
     const awayTeam = isHome ? m.opponent : 'Bolton Wanderers';
 
     // Get scorers
-    const goals = [];
-    for (let i = 1; i <= 8; i++) {
-      const scorer = m[`scorer${i}`];
-      const assist = m[`assist${i}`];
-      if (scorer && scorer.trim()) {
-        // Parse "M. Burstow (60')" 
-        const match = scorer.match(/^(.+?)\s*\((.+?)\)/);
-        if (match) {
-          const assistMatch = assist?.match(/^(.+?)\s*\((.+?)\)/);
-          goals.push({
-            scorer: { name: match[1].trim() },
-            assist: assistMatch ? { name: assistMatch[1].trim() } : null,
-            minute: parseInt(match[2]) || 0,
-            team: { name: 'Bolton Wanderers' },
-            type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
-          });
-          bookings.push({
-  player: { name: player.trim() },
-  minute: parseInt(time) || 0,
-  card: 'YELLOW',
-  team: { id: 60, name: 'Bolton Wanderers' },  // ← add this
-});
-substitutions.push({
-  playerIn: { name: playerIn.trim() },
-  playerOut: { name: playerOut.trim() },
-  minute: parseInt(time) || 0,
-  team: { id: 60, name: 'Bolton Wanderers' },  // ← add this
-});
+const goals = [];
+for (let i = 1; i <= 8; i++) {
+  const scorer = m[`scorer${i}`];
+  const assist = m[`assist${i}`];
+  if (scorer && scorer.trim()) {
+    const match = scorer.match(/^(.+?)\s*\((.+?)\)/);
+    if (match) {
+      const assistMatch = assist?.match(/^(.+?)\s*\((.+?)\)/);
+      goals.push({
+        scorer: { name: match[1].trim() },
+        assist: assistMatch ? { name: assistMatch[1].trim() } : null,
+        minute: parseInt(match[2]) || 0,
+        team: { id: 60, name: 'Bolton Wanderers' },
+        type: scorer.includes('pen') ? 'PENALTY' : scorer.includes('og') ? 'OWN' : 'REGULAR',
+      });
+    }
+  }
+}
+
+// Get bookings
+const bookings = [];
+for (let i = 1; i <= 6; i++) {
+  const player = m[`yellowCard${i}`];
+  const time = m[`yellowCardTime${i}`];
+  if (player && player.trim()) {
+    bookings.push({
+      player: { name: player.trim() },
+      minute: parseInt(time) || 0,
+      card: 'YELLOW',
+      team: { id: 60, name: 'Bolton Wanderers' },
+    });
+  }
+}
+for (let i = 1; i <= 2; i++) {
+  const player = m[`redCard${i}`];
+  const time = m[`redCardTime${i}`];
+  if (player && player.trim()) {
+    bookings.push({
+      player: { name: player.trim() },
+      minute: parseInt(time) || 0,
+      card: 'RED',
+      team: { id: 60, name: 'Bolton Wanderers' },
+    });
+  }
+}
+
+// Get substitutions
+const substitutions = [];
+for (let i = 1; i <= 5; i++) {
+  const playerIn = m[`substitute${i}`];
+  const playerOut = m[`substitutedPlayer${i}`];
+  const time = m[`substituteTime${i}`];
+  if (playerIn && playerIn.trim() && playerOut && playerOut.trim()) {
+    substitutions.push({
+      playerIn: { name: playerIn.trim() },
+      playerOut: { name: playerOut.trim() },
+      minute: parseInt(time) || 0,
+      team: { id: 60, name: 'Bolton Wanderers' },
+    });
+  }
+}
         }
       }
     }
