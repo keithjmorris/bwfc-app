@@ -295,13 +295,14 @@ export default function ResultsPage() {
       </header>
 
       <TeamSelector
-        selectedTeam={selectedTeam}
-        onChange={val => {
-          setSelectedTeam(val);
-          setLoading(true);
-          setMatches([]);
-        }}
-      />
+  selectedTeam={selectedTeam}
+  showAll={false}
+  onChange={val => {
+    setSelectedTeam(val);
+    setLoading(true);
+    setMatches([]);
+  }}
+/>
 
       <div className="content">
         {loading && <p className="state-msg">Loading results…</p>}
