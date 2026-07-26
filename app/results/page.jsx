@@ -171,7 +171,7 @@ async function fetchBoltonHistoricResults() {
 
     return {
       id: m.id,
-      utcDate: new Date(m.date + ' 2025').toISOString(),
+      utcDate: new Date(m.date.replace(/(\d+)(st|nd|rd|th)/, '$1')).toISOString(),
       status: 'FINISHED',
       competition: { name: m.competition, code: 'EL1' },
       homeTeam: {
