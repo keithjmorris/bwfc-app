@@ -430,7 +430,7 @@ function applyFilter({ playerStats, teamMatchStats }) {
   <div className="stats-controls">
     <div className="stats-team-name">
       <img src={selectedTeam.crest} alt="" className="stats-team-crest" />
-      <span>{selectedTeam.name}</span>
+      
     </div>
     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
       <div className="stats-toggles">
