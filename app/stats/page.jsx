@@ -421,7 +421,7 @@ function applyFilter({ playerStats, teamMatchStats }) {
                 }}
               />
             </div>
-            <span>{t.shortName}</span>
+            
           </button>
         ))}
       </div>

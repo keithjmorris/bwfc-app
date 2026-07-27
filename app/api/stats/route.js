@@ -13,6 +13,7 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db = getFirestore(app);
+console.log('Firebase project:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
 
 const cache = new Map();
 const CACHE_TTL = 60 * 60 * 1000;
