@@ -1,3 +1,10 @@
+import { TEAM_ID_MAP, LEAGUE_IDS, convertMatch, fetchHighlightly } from '@/lib/highlightly';
+import { ALL_TEAMS as TEAMS } from '@/lib/allTeams';
+
+function getCompCode(leagueId) {
+  return Object.entries(LEAGUE_IDS).find(([, id]) => id === leagueId)?.[0] || 'UNKNOWN';
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamId = searchParams.get('teamId');
@@ -5,68 +12,79 @@ export async function GET(request) {
   const status = searchParams.get('status');
   const dateFrom = searchParams.get('dateFrom');
   const dateTo = searchParams.get('dateTo');
+  const season = searchParams.get('season') || '2026';
+
+  const apiKey = process.env.HIGHLIGHTLY_API_KEY;
 
   try {
-    // Build list of team IDs to fetch
-    let ids = [];
+    // Build list of football-data team IDs
+    let fdIds = [];
     if (teamId) {
-      ids = [parseInt(teamId)];
+      fdIds = [parseInt(teamId)];
     } else if (teamIds) {
-      ids = teamIds.split(',').map(Number);
+      fdIds = teamIds.split(',').map(Number);
+    } else {
+      fdIds = TEAMS.map(t => t.id);
     }
 
-    if (ids.length === 0) {
+    // Convert to Highlightly IDs
+    const hlIds = fdIds.map(id => TEAM_ID_MAP[id]).filter(Boolean);
+
+    if (hlIds.length === 0) {
       return Response.json({ matches: [] });
     }
 
-    // Determine which competitions we need
-    // Fetch from both PL and ELC to cover all cases
-    const competitions = ['PL', 'ELC'];
+    const allMatches = [];
+    const seen = new Set();
 
-    const seasonParam = searchParams.get('season');
-const currentDate = new Date();
-const defaultSeason = currentDate >= new Date('2026-08-09') ? '2026' : '2025';
-const season = seasonParam || defaultSeason;
-const params = new URLSearchParams({ season });
-    if (status) params.set('status', status);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
+    // Fetch home and away matches for each team
+    for (const hlId of hlIds) {
+      let homePath = `/matches?homeTeamId=${hlId}&season=${season}&limit=100`;
+      let awayPath = `/matches?awayTeamId=${hlId}&season=${season}&limit=100`;
 
-    const results = await Promise.all(
-      competitions.map(async comp => {
-        const res = await fetch(
-          `https://api.football-data.org/v4/competitions/${comp}/matches?${params}`,
-          {
-            headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY },
-            next: { revalidate: 60 },
-          }
-        );
-        if (!res.ok) return [];
-        const data = await res.json();
-        return data.matches || [];
-      })
-    );
+      if (dateFrom) {
+        homePath += `&date=${dateFrom}`;
+        awayPath += `&date=${dateFrom}`;
+      }
 
-    // Flatten and filter to requested team IDs
-    const idSet = new Set(ids);
-    const allMatches = results.flat().filter(m =>
-      idSet.has(m.homeTeam?.id) || idSet.has(m.awayTeam?.id)
-    );
+      const [homeData, awayData] = await Promise.all([
+        fetchHighlightly(homePath, apiKey),
+        fetchHighlightly(awayPath, apiKey),
+      ]);
 
-    // If single teamId, filter further
-    if (teamId) {
-      const tid = parseInt(teamId);
-      const filtered = allMatches.filter(m =>
-        m.homeTeam?.id === tid || m.awayTeam?.id === tid
-      );
-      filtered.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-      return Response.json({ matches: filtered });
+      const matches = [
+        ...(homeData?.data || []),
+        ...(awayData?.data || []),
+      ];
+
+      for (const m of matches) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+
+        const compCode = getCompCode(m.league?.id);
+        allMatches.push(convertMatch(m, compCode));
+      }
     }
 
-    allMatches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
-    return Response.json({ matches: allMatches });
+    // Apply status filter
+    let matches = allMatches;
+    if (status === 'FINISHED') {
+      matches = allMatches.filter(m => m.status === 'FINISHED');
+    } else if (status === 'LIVE') {
+      matches = allMatches.filter(m =>
+        ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'].includes(m.status)
+      );
+    }
 
+    // Filter out preseason friendlies (before Aug 8 2026)
+    const seasonStart = new Date('2026-08-08');
+    matches = matches.filter(m => new Date(m.utcDate) >= seasonStart);
+
+    // Sort by date
+    matches.sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+
+    return Response.json({ matches });
   } catch (err) {
-    return Response.json({ error: 'Failed to fetch matches' }, { status: 500 });
+    return Response.json({ error: err.message }, { status: 500 });
   }
 }
