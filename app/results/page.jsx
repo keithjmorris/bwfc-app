@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useFavourites } from '@/lib/FavouritesContext';
 import TeamSelector from '@/components/TeamSelector';
 import MatchDetails from '@/components/MatchDetails';
+import MatchHighlights from '@/components/MatchHighlights';
 
 function MatchCard({ match }) {
   const { favourites } = useFavourites();
@@ -325,6 +326,7 @@ export default function ResultsPage() {
                     <MatchCard match={match} />
                     <MatchSummary match={match} />
                     <MatchDetails match={match} />
+                    <MatchHighlights match={match} />
                   </div>
                 ))}
               </div>
