@@ -82,6 +82,32 @@ async function fetchHL(path) {
   }
   return res.json();
 }
+
+function findPlayer(players, name) {
+  if (!name) return null;
+  const simplify = str => str
+    .replace(/[ØøÒÓÔÕÖ]/g, 'o')
+    .replace(/[ÀÁÂÃÄÅàáâãäå]/g, 'a')
+    .replace(/[ÈÉÊËèéêë]/g, 'e')
+    .replace(/[ÌÍÎÏìíîï]/g, 'i')
+    .replace(/[ÙÚÛÜùúûü]/g, 'u')
+    .replace(/[ÝýÿŸ]/g, 'y')
+    .replace(/[Ññ]/g, 'n')
+    .replace(/[Çç]/g, 'c')
+    .toLowerCase();
+
+  return Object.values(players).find(p => {
+    if (p.name === name) return true;
+    const parts = name.split(' ');
+    if (parts.length >= 2 && parts[0].endsWith('.')) {
+      const initial = parts[0][0].toUpperCase();
+      const lastName = simplify(parts.slice(1).join(' '));
+      return p.name.startsWith(initial) && simplify(p.name).includes(lastName);
+    }
+    return false;
+  });
+}
+
 function processMatch(match, events, lineups, statistics, boxScore, teamHlId, teamFdId) {
   const isHome = match.homeTeam?.id === teamHlId;
   const opponent = isHome ? match.awayTeam : match.homeTeam;
@@ -112,37 +138,10 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
 
   const players = {};
 
-  function findPlayer(players, name) {
-  if (!name) return null;
   
-  // Simple character replacements for common special chars
-  const simplify = str => str
-    .replace(/[ØøÒÓÔÕÖ]/g, 'o')
-    .replace(/[ÀÁÂÃÄÅà áâãäå]/g, 'a')
-    .replace(/[ÈÉÊËèéêë]/g, 'e')
-    .replace(/[ÌÍÎÏìíîï]/g, 'i')
-    .replace(/[ÙÚÛÜùúûü]/g, 'u')
-    .replace(/[ÝýÿŸ]/g, 'y')
-    .replace(/[Ññ]/g, 'n')
-    .replace(/[Çç]/g, 'c')
-    .toLowerCase();
-
-  return Object.values(players).find(p => {
-    if (p.name === name) return true;
-    const parts = name.split(' ');
-    if (parts.length >= 2 && parts[0].endsWith('.')) {
-      const initial = parts[0][0].toUpperCase();
-      const lastName = simplify(parts.slice(1).join(' '));
-      return p.name.startsWith(initial) && simplify(p.name).includes(lastName);
-    }
-    return false;
-  });
-}
 
   // Process starting lineup
   const startingXI = (teamLineup?.initialLineup || []).flat();
-console.log('Starting XI:', startingXI.map(p => p.name));
-console.log('Bench:', teamLineup?.substitutes?.map(p => p.name));
   for (const p of startingXI) {
     players[p.id] = {
       id: p.id, name: p.name, position: p.position, shirtNumber: p.number,
@@ -168,14 +167,15 @@ console.log('Bench:', teamLineup?.substitutes?.map(p => p.name));
 
   // Process events
   for (const e of events || []) {
-    if (!e.team || e.team.id !== teamHlId) continue;
+  if (!e.team || e.team.id !== teamHlId) continue;
+  
+  // just check once
     const minute = parseInt(e.time) || 0;
 
     
       if (e.type === 'Substitution') {
-  const outPlayer = findPlayer(e.player);      // e.player goes OFF
-  const inPlayer = findPlayer(e.substituted);  // e.substituted comes ON
-     
+  const outPlayer = findPlayer(players, e.player);
+  const inPlayer = findPlayer(players, e.substituted);
 
       if (outPlayer) {
         outPlayer.minutesPlayed = minute;
@@ -193,7 +193,9 @@ console.log('Bench:', teamLineup?.substitutes?.map(p => p.name));
         });
       }
     } else if (e.type === 'Goal' || e.type === 'Penalty') {
-      const scorer = findPlayer(e.player);
+     
+  const scorer = findPlayer(players, e.player);
+  
       if (scorer) {
         scorer.goals += 1;
         const last = scorer.matches.at(-1);
@@ -300,7 +302,7 @@ console.log('Bench:', teamLineup?.substitutes?.map(p => p.name));
 }
 
 async function processTeam(team) {
-  console.log(`\nProcessing ${team.name}...`);
+ 
 
   // Load existing Firestore data
   const docKey = `raw_${team.fdId}_${SEASON}`;
@@ -317,7 +319,7 @@ async function processTeam(team) {
     teamMatchStats = data.teamMatchStats || [];
     // Track already processed matches
     teamMatchStats.forEach(m => processedMatchIds.add(m.id));
-    console.log(`Found ${teamMatchStats.length} existing matches in Firestore`);
+   
   }
 
   // Fetch home and away matches
@@ -350,17 +352,14 @@ const allMatches = [
 
   // Find new matches not yet in Firestore
   const newMatches = uniqueMatches.filter(m => !processedMatchIds.has(String(m.id)));
-  console.log(`Found ${uniqueMatches.length} finished matches, ${newMatches.length} new`);
 
   if (newMatches.length === 0) {
-    console.log(`✅ ${team.name} already up to date`);
     return;
   }
 
   // Process each new match
   for (let i = 0; i < newMatches.length; i++) {
     const match = newMatches[i];
-    console.log(`Fetching match ${i + 1}/${newMatches.length}: ${match.homeTeam?.name} vs ${match.awayTeam?.name} (${match.date?.substring(0, 10)})`);
 
     await sleep(500); // Small delay to avoid rate limiting
 
@@ -402,20 +401,16 @@ const { players, teamStats } = processMatch(match, events, lineups, statistics, 
       teamMatchStats,
       updatedAt: new Date().toISOString(),
     });
-    console.log(`✅ Firestore write successful for ${docKey}`);
   } catch (firestoreErr) {
     console.error(`❌ Firestore write failed:`, firestoreErr.message);
   }
 
-  console.log(`✅ Saved ${Object.keys(playerStats).length} players and ${teamMatchStats.length} total matches for ${team.name}`);
 }
 
 async function main() {
-  console.log('Populating 2026/27 stats from Highlightly...');
   for (const team of TEAMS) {
     await processTeam(team);
   }
-  console.log('\n✅ All done!');
   process.exit(0);
 }
 
