@@ -300,11 +300,7 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
     teamStats,
   };
 }
-
 async function processTeam(team) {
- 
-
-  // Load existing Firestore data
   const docKey = `raw_${team.fdId}_${SEASON}`;
   const docRef = doc(db, 'player_stats', docKey);
   const existing = await getDoc(docRef);
@@ -317,65 +313,54 @@ async function processTeam(team) {
     const data = existing.data();
     playerStats = data.playerStats || {};
     teamMatchStats = data.teamMatchStats || [];
-    // Track already processed matches
     teamMatchStats.forEach(m => processedMatchIds.add(m.id));
-   
   }
 
-  // Fetch home and away matches
   const [homeData, awayData] = await Promise.all([
     fetchHL(`/matches?homeTeamId=${team.hlId}&season=${SEASON}&limit=100`),
     fetchHL(`/matches?awayTeamId=${team.hlId}&season=${SEASON}&limit=100`),
   ]);
 
-  // Only include competitive matches from known leagues
-const COMPETITIVE_LEAGUE_IDS = [33973, 34824, 41632, 146305]; // PL, Championship, League Cup, FA Cup
+  const COMPETITIVE_LEAGUE_IDS = [33973, 34824, 41632, 146305];
 
-const allMatches = [
-  ...(homeData?.data || []),
-  ...(awayData?.data || []),
-].filter(m =>
-  (m.state?.description === 'Finished' ||
-  m.state?.description === 'Finished after penalties' ||
-  m.state?.description === 'Finished after extra time') &&
-  COMPETITIVE_LEAGUE_IDS.includes(m.league?.id) &&
-  new Date(m.date) >= new Date(SEASON_START)
-);
-
-  // Deduplicate
   const seen = new Set();
-  const uniqueMatches = allMatches.filter(m => {
+  const allMatches = [
+    ...(homeData?.data || []),
+    ...(awayData?.data || []),
+  ].filter(m => {
     if (seen.has(m.id)) return false;
     seen.add(m.id);
-    return true;
+    return (
+      (m.state?.description === 'Finished' ||
+       m.state?.description === 'Finished after penalties' ||
+       m.state?.description === 'Finished after extra time') &&
+      COMPETITIVE_LEAGUE_IDS.includes(m.league?.id) &&
+      new Date(m.date) >= new Date(SEASON_START)
+    );
   });
 
-  // Find new matches not yet in Firestore
-  const newMatches = uniqueMatches.filter(m => !processedMatchIds.has(String(m.id)));
+  const newMatches = allMatches.filter(m => !processedMatchIds.has(String(m.id)));
+  console.log(`${team.name}: ${allMatches.length} finished, ${newMatches.length} new`);
 
-  if (newMatches.length === 0) {
-    return;
-  }
+  if (newMatches.length === 0) return;
 
-  // Process each new match
-  for (let i = 0; i < newMatches.length; i++) {
-    const match = newMatches[i];
-
-    await sleep(500); // Small delay to avoid rate limiting
+  for (const match of newMatches) {
+    console.log(`Fetching: ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
+    await sleep(500);
 
     const [events, lineups, statistics, boxScore] = await Promise.all([
-  fetchHL(`/events/${match.id}`),
-  fetchHL(`/lineups/${match.id}`),
-  fetchHL(`/statistics/${match.id}`),
-  fetchHL(`/box-score/${match.id}`),
-]);
+      fetchHL(`/events/${match.id}`),
+      fetchHL(`/lineups/${match.id}`),
+      fetchHL(`/statistics/${match.id}`),
+      fetchHL(`/box-score/${match.id}`),
+    ]);
 
-const { players, teamStats } = processMatch(match, events, lineups, statistics, boxScore, team.hlId, team.fdId);
+    const { players, teamStats } = processMatch(
+      match, events, lineups, statistics, boxScore, team.hlId, team.fdId
+    );
 
-    // Add match ID to teamStats for tracking
     teamStats.id = String(match.id);
 
-    // Merge player stats
     for (const p of players) {
       if (!playerStats[p.id]) {
         playerStats[p.id] = { ...p, matches: [...p.matches] };
@@ -387,34 +372,37 @@ const { players, teamStats } = processMatch(match, events, lineups, statistics, 
         playerStats[p.id].assists += p.assists;
         playerStats[p.id].yellowCards += p.yellowCards;
         playerStats[p.id].redCards += p.redCards;
+        playerStats[p.id].xg = (playerStats[p.id].xg || 0) + (p.xg || 0);
+        playerStats[p.id].passes = (playerStats[p.id].passes || 0) + (p.passes || 0);
+        playerStats[p.id].tackles = (playerStats[p.id].tackles || 0) + (p.tackles || 0);
         playerStats[p.id].matches.push(...p.matches);
       }
     }
-
     teamMatchStats.push(teamStats);
   }
 
-  // Save to Firestore
-  try {
-    await setDoc(docRef, {
-      playerStats,
-      teamMatchStats,
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (firestoreErr) {
-    console.error(`❌ Firestore write failed:`, firestoreErr.message);
-  }
-
+  await setDoc(docRef, {
+    playerStats,
+    teamMatchStats,
+    updatedAt: new Date().toISOString(),
+  });
+  console.log(`✅ Saved ${Object.keys(playerStats).length} players for ${team.name}`);
 }
 
 async function main() {
+  console.log('Starting populate script...');
+  console.log('Populating 2026/27 stats from Highlightly...');
+  console.log('Number of teams:', TEAMS.length);
   for (const team of TEAMS) {
-    await processTeam(team);
+    console.log('Processing:', team.name);
+    try {
+      const result = await processTeam(team);
+      console.log('Result:', result);
+    } catch (err) {
+      console.error('Error processing', team.name, ':', err.message);
+    }
   }
+  console.log('All done!');
   process.exit(0);
 }
-
-main().catch(err => {
-  console.error('Error:', err);
-  process.exit(1);
-});
+main().catch(console.error);
