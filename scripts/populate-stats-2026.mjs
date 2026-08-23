@@ -178,20 +178,20 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
   const inPlayer = findPlayer(players, e.substituted);
 
       if (outPlayer) {
-        outPlayer.minutesPlayed = minute;
-        const last = outPlayer.matches.at(-1);
-        if (last) last.minutesPlayed = minute;
-      }
-      if (inPlayer) {
-        inPlayer.subApps += 1;
-        inPlayer.minutesPlayed += 90 - minute;
-        inPlayer.matches.push({
-          ...baseMatchInfo,
-          started: false,
-          minutesPlayed: 90 - minute,
-          cameOnMinute: minute,
-        });
-      }
+  outPlayer.minutesPlayed = minute;
+  const last = outPlayer.matches.at(-1);
+  if (last) last.minutesPlayed = minute;
+}
+if (inPlayer) {
+  inPlayer.subApps += 1;
+  inPlayer.minutesPlayed += 90 - minute;
+  inPlayer.matches.push({
+    ...baseMatchInfo,
+    started: false,
+    minutesPlayed: 90 - minute,
+    cameOnMinute: minute,
+  });
+}
     } else if (e.type === 'Goal' || e.type === 'Penalty') {
      
   const scorer = findPlayer(players, e.player);
@@ -340,12 +340,10 @@ async function processTeam(team) {
   });
 
   const newMatches = allMatches.filter(m => !processedMatchIds.has(String(m.id)));
-  console.log(`${team.name}: ${allMatches.length} finished, ${newMatches.length} new`);
 
   if (newMatches.length === 0) return;
 
   for (const match of newMatches) {
-    console.log(`Fetching: ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
     await sleep(500);
 
     const [events, lineups, statistics, boxScore] = await Promise.all([
@@ -386,23 +384,16 @@ async function processTeam(team) {
     teamMatchStats,
     updatedAt: new Date().toISOString(),
   });
-  console.log(`✅ Saved ${Object.keys(playerStats).length} players for ${team.name}`);
 }
 
 async function main() {
-  console.log('Starting populate script...');
-  console.log('Populating 2026/27 stats from Highlightly...');
-  console.log('Number of teams:', TEAMS.length);
+  
   for (const team of TEAMS) {
-    console.log('Processing:', team.name);
     try {
       const result = await processTeam(team);
-      console.log('Result:', result);
     } catch (err) {
-      console.error('Error processing', team.name, ':', err.message);
     }
   }
-  console.log('All done!');
   process.exit(0);
 }
 main().catch(console.error);
