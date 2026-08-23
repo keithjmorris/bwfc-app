@@ -114,14 +114,26 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
 
   function findPlayer(players, name) {
   if (!name) return null;
-  const normalise = str => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  
+  // Simple character replacements for common special chars
+  const simplify = str => str
+    .replace(/[ØøÒÓÔÕÖ]/g, 'o')
+    .replace(/[ÀÁÂÃÄÅà áâãäå]/g, 'a')
+    .replace(/[ÈÉÊËèéêë]/g, 'e')
+    .replace(/[ÌÍÎÏìíîï]/g, 'i')
+    .replace(/[ÙÚÛÜùúûü]/g, 'u')
+    .replace(/[ÝýÿŸ]/g, 'y')
+    .replace(/[Ññ]/g, 'n')
+    .replace(/[Çç]/g, 'c')
+    .toLowerCase();
+
   return Object.values(players).find(p => {
     if (p.name === name) return true;
     const parts = name.split(' ');
     if (parts.length >= 2 && parts[0].endsWith('.')) {
       const initial = parts[0][0].toUpperCase();
-      const lastName = normalise(parts.slice(1).join(' '));
-      return p.name.startsWith(initial) && normalise(p.name).includes(lastName);
+      const lastName = simplify(parts.slice(1).join(' '));
+      return p.name.startsWith(initial) && simplify(p.name).includes(lastName);
     }
     return false;
   });
