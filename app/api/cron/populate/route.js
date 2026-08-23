@@ -153,21 +153,24 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
     const minute = parseInt(e.time) || 0;
 
     if (e.type === 'Substitution') {
-      const outPlayer = findPlayer(players, e.player);
-      const inPlayer = findPlayer(players, e.substituted);
-      if (outPlayer) {
-        outPlayer.minutesPlayed = minute;
-        const last = outPlayer.matches.at(-1);
-        if (last) last.minutesPlayed = minute;
-      }
-      if (inPlayer) {
-        inPlayer.subApps += 1;
-        inPlayer.minutesPlayed += 90 - minute;
-        inPlayer.matches.push({
-          ...baseMatchInfo, started: false,
-          minutesPlayed: 90 - minute, cameOnMinute: minute,
-        });
-      }
+  const outPlayer = findPlayer(players, e.player);
+  const inPlayer = findPlayer(players, e.substituted);
+
+  if (outPlayer) {
+    outPlayer.minutesPlayed = minute;
+    const last = outPlayer.matches.at(-1);
+    if (last) last.minutesPlayed = minute;
+  }
+  if (inPlayer) {
+    inPlayer.subApps += 1;
+    inPlayer.minutesPlayed += 90 - minute;
+    inPlayer.matches.push({
+      ...baseMatchInfo,
+      started: false,
+      minutesPlayed: 90 - minute,
+      cameOnMinute: minute,
+    });
+  }
     } else if (e.type === 'Goal' || e.type === 'Penalty') {
       const scorer = findPlayer(players, e.player);
       if (scorer) {
