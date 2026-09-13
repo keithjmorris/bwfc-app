@@ -140,6 +140,8 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
     };
   }
 
+  const starterNames = new Set(startingXI.map(p => p.name));
+
   for (const p of teamLineup?.substitutes || []) {
     if (!players[p.id]) {
       players[p.id] = {
@@ -154,21 +156,20 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
   for (const e of events || []) {
     if (!e.team || e.team.id !== teamHlId) continue;
     const minute = parseInt(e.time) || 0;
+
 if (e.type === 'Substitution') {
-  // Determine who is going off by checking who is in the starting XI
   const playerA = findPlayer(players, e.player);
   const playerB = findPlayer(players, e.substituted);
-  
-  // The one with starts > 0 or already has a match entry is going OFF
-  const outPlayer = (playerA?.starts > 0 || playerA?.matches?.length > 0) ? playerA : playerB;
+  const playerAIsStarter = playerA && starterNames.has(playerA.name);
+  const playerBIsStarter = playerB && starterNames.has(playerB.name);
+  const outPlayer = playerAIsStarter ? playerA : playerBIsStarter ? playerB : null;
   const inPlayer = outPlayer === playerA ? playerB : playerA;
-
   if (outPlayer) {
     outPlayer.minutesPlayed = parseInt(e.time) || 90;
     const last = outPlayer.matches.at(-1);
     if (last) last.minutesPlayed = parseInt(e.time) || 90;
   }
-  if (inPlayer) {
+  if (inPlayer && inPlayer !== outPlayer) {
     inPlayer.subApps += 1;
     inPlayer.minutesPlayed += 90 - (parseInt(e.time) || 90);
     inPlayer.matches.push({
