@@ -82,7 +82,6 @@ async function fetchHL(path) {
   }
   return res.json();
 }
-
 function findPlayer(players, name) {
   if (!name) return null;
   const simplify = str => str
@@ -94,16 +93,22 @@ function findPlayer(players, name) {
     .replace(/[ÝýÿŸ]/g, 'y')
     .replace(/[Ññ]/g, 'n')
     .replace(/[Çç]/g, 'c')
+    .replace(/-/g, ' ')  // treat hyphens as spaces
     .toLowerCase();
 
   return Object.values(players).find(p => {
     if (p.name === name) return true;
+    if (simplify(p.name) === simplify(name)) return true;
+    // Check abbreviated name e.g. "T. Gale" matches "Thierry Gale"
     const parts = name.split(' ');
     if (parts.length >= 2 && parts[0].endsWith('.')) {
       const initial = parts[0][0].toUpperCase();
       const lastName = simplify(parts.slice(1).join(' '));
       return p.name.startsWith(initial) && simplify(p.name).includes(lastName);
     }
+    // Check if first word matches first name (e.g. "Samuel" matches "Samuel Iling-Junior")
+    if (simplify(p.name).startsWith(simplify(name.split(' ')[0])) &&
+        simplify(p.name).includes(simplify(name.split(' ').pop()))) return true;
     return false;
   });
 }
@@ -172,27 +177,31 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
   // just check once
     const minute = parseInt(e.time) || 0;
 
-    
-      if (e.type === 'Substitution') {
-  const outPlayer = findPlayer(players, e.player);
-  const inPlayer = findPlayer(players, e.substituted);
+    if (e.type === 'Substitution') {
+  // Determine who is going off by checking who is in the starting XI
+  const playerA = findPlayer(players, e.player);
+  const playerB = findPlayer(players, e.substituted);
+  
+  // The one with starts > 0 or already has a match entry is going OFF
+  const outPlayer = (playerA?.starts > 0 || playerA?.matches?.length > 0) ? playerA : playerB;
+  const inPlayer = outPlayer === playerA ? playerB : playerA;
 
-      if (outPlayer) {
-  outPlayer.minutesPlayed = minute;
-  const last = outPlayer.matches.at(-1);
-  if (last) last.minutesPlayed = minute;
-}
-if (inPlayer) {
-  inPlayer.subApps += 1;
-  inPlayer.minutesPlayed += 90 - minute;
-  inPlayer.matches.push({
-    ...baseMatchInfo,
-    started: false,
-    minutesPlayed: 90 - minute,
-    cameOnMinute: minute,
-  });
-}
-    } else if (e.type === 'Goal' || e.type === 'Penalty') {
+  if (outPlayer) {
+    outPlayer.minutesPlayed = parseInt(e.time) || 90;
+    const last = outPlayer.matches.at(-1);
+    if (last) last.minutesPlayed = parseInt(e.time) || 90;
+  }
+  if (inPlayer) {
+    inPlayer.subApps += 1;
+    inPlayer.minutesPlayed += 90 - (parseInt(e.time) || 90);
+    inPlayer.matches.push({
+      ...baseMatchInfo,
+      started: false,
+      minutesPlayed: 90 - (parseInt(e.time) || 90),
+      cameOnMinute: parseInt(e.time) || 90,
+    });
+  }
+} else if (e.type === 'Goal' || e.type === 'Penalty') {
      
   const scorer = findPlayer(players, e.player);
   
