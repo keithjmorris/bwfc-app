@@ -116,6 +116,7 @@ if (pParts.length >= 2 && pParts[0].endsWith('.')) {
   const lastName = simplify(pParts.slice(1).join(' '));
   return name.toUpperCase().startsWith(initial) && simplify(name).includes(lastName);
 }
+
     return false;
   });
 }
@@ -178,39 +179,49 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
     }
   }
 
-  console.log('Players after bench:', Object.values(players).map(p => p.name));
-
-
-  console.log('Events order for this match:');
 (events || []).filter(e => e.team?.id === teamHlId).forEach(e => 
   console.log(`  ${e.time} ${e.type} ${e.player}`)
 );
+
   // Add box score players missing from lineup
-  console.log('BOX SCORE CHECK:', typeof boxScore, Array.isArray(boxScore));
-  for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
-    if (teamData.team?.id !== teamHlId) continue;
-    for (const bsPlayer of teamData.players || []) {
-      const existing = findPlayer(players, bsPlayer.name);
-      if (!existing) {
-        players[bsPlayer.id] = {
-          id: bsPlayer.id,
-          name: bsPlayer.name,
-          position: bsPlayer.position || '',
-          shirtNumber: bsPlayer.shirtNumber || null,
-          starts: bsPlayer.isSubstitute ? 0 : 1,
-          subApps: bsPlayer.isSubstitute ? 1 : 0,
+for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
+  if (teamData.team?.id !== teamHlId) continue;
+  for (const bsPlayer of teamData.players || []) {
+    const existing = findPlayer(players, bsPlayer.name);
+    if (!existing) {
+      // Player not found at all - add them
+      players[bsPlayer.id] = {
+        id: bsPlayer.id,
+        name: bsPlayer.name,
+        position: bsPlayer.position || '',
+        shirtNumber: bsPlayer.shirtNumber || null,
+        starts: bsPlayer.isSubstitute ? 0 : 1,
+        subApps: bsPlayer.isSubstitute ? 1 : 0,
+        minutesPlayed: bsPlayer.minutesPlayed || 0,
+        goals: 0, assists: 0, yellowCards: 0, redCards: 0,
+        xg: 0, passes: 0, tackles: 0,
+        matches: [{
+          ...baseMatchInfo,
+          started: !bsPlayer.isSubstitute,
           minutesPlayed: bsPlayer.minutesPlayed || 0,
-          goals: 0, assists: 0, yellowCards: 0, redCards: 0,
-          xg: 0, passes: 0, tackles: 0,
-          matches: [{
-            ...baseMatchInfo,
-            started: !bsPlayer.isSubstitute,
-            minutesPlayed: bsPlayer.minutesPlayed || 0,
-          }],
-        };
+        }],
+      };
+    } else if (!existing.matches.find(m => m.id === match.id)) {
+      // Player exists but has no entry for THIS match - add it
+      if (bsPlayer.isSubstitute) {
+        existing.subApps += 1;
+      } else {
+        existing.starts += 1;
       }
+      existing.minutesPlayed += bsPlayer.minutesPlayed || 0;
+      existing.matches.push({
+        ...baseMatchInfo,
+        started: !bsPlayer.isSubstitute,
+        minutesPlayed: bsPlayer.minutesPlayed || 0,
+      });
     }
   }
+}
 
   // Process events
   for (const e of events || []) {
@@ -243,17 +254,15 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
   }
 } else if (e.type === 'Goal' || e.type === 'Penalty') {
   const scorer = findPlayer(players, e.player);
-   console.log(`Goal: ${e.player} -> found: ${scorer?.name || 'NOT FOUND'}`);
-  console.log('Players in object:', Object.values(players).map(p => p.name).join(', '));
-     
-  
+   
+
       if (scorer) {
         scorer.goals += 1;
         const last = scorer.matches.at(-1);
         if (last) last.goals = (last.goals || 0) + 1;
       }
       if (e.assist) {
-        const assister = findPlayer(e.assist);
+        const assister = findPlayer(players, e.assist);
         if (assister) {
           assister.assists += 1;
           const last = assister.matches.at(-1);
@@ -261,14 +270,14 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
         }
       }
     } else if (e.type === 'Yellow Card') {
-      const player = findPlayer(e.player);
+      const player = findPlayer(players, e.player);
       if (player) {
         player.yellowCards += 1;
         const last = player.matches.at(-1);
         if (last) last.yellowCards = (last.yellowCards || 0) + 1;
       }
     } else if (e.type === 'Red Card' || e.type === 'Yellow Card/Red Card') {
-      const player = findPlayer(e.player);
+      const player = findPlayer(players, e.player);
       if (player) {
         player.redCards += 1;
         const last = player.matches.at(-1);
@@ -282,7 +291,7 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId, te
     if (teamData.team?.id !== teamHlId) continue;
     for (const bsPlayer of teamData.players || []) {
       const ps = bsPlayer.statistics || {};
-      const player = findPlayer(bsPlayer.name);
+      const player = findPlayer(players, bsPlayer.name);
       if (player && player.matches.length > 0) {
         const lastMatch = player.matches.at(-1);
         lastMatch.xg = ps.expectedGoals || 0;

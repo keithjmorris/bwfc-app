@@ -99,13 +99,14 @@ function findPlayer(players, name) {
     // Check if first word matches first name (e.g. "Samuel" matches "Samuel Iling-Junior")
     if (simplify(p.name).startsWith(simplify(name.split(' ')[0])) &&
         simplify(p.name).includes(simplify(name.split(' ').pop()))) return true;
-         // Check if stored name is abbreviated e.g. stored "T. Gale" matches search "Thierry Gale"
+        // Check if stored name is abbreviated e.g. stored "T. Gale" matches search "Thierry Gale"
 const pParts = p.name.split(' ');
 if (pParts.length >= 2 && pParts[0].endsWith('.')) {
   const initial = pParts[0][0].toUpperCase();
   const lastName = simplify(pParts.slice(1).join(' '));
   return name.toUpperCase().startsWith(initial) && simplify(name).includes(lastName);
 }
+
     return false;
   });
 }
@@ -128,14 +129,21 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
   const oppScore = isHome ? awayScore : homeScore;
 
   const baseMatchInfo = {
-    id: match.id, date: match.date, opponent: opponent?.name,
-    homeAway: isHome ? 'H' : 'A', score: `${homeScore}-${awayScore}`,
-    competition: compCode, goals: 0, assists: 0, yellowCards: 0, redCards: 0,
+    id: match.id,
+    date: match.date,
+    opponent: opponent?.name,
+    homeAway: isHome ? 'H' : 'A',
+    score: `${homeScore}-${awayScore}`,
+    competition: compCode,
+    goals: 0, assists: 0, yellowCards: 0, redCards: 0,
     xg: 0, passes: 0, passAccuracy: 0, tackles: 0,
   };
 
   const players = {};
 
+  
+
+  // Process starting lineup
   const startingXI = (teamLineup?.initialLineup || []).flat();
   for (const p of startingXI) {
     players[p.id] = {
@@ -146,28 +154,37 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
       matches: [{ ...baseMatchInfo, started: true, minutesPlayed: 90 }],
     };
   }
-
   const starterNames = new Set(startingXI.map(p => p.name));
 
+  // Process bench
   for (const p of teamLineup?.substitutes || []) {
     if (!players[p.id]) {
       players[p.id] = {
         id: p.id, name: p.name, position: p.position, shirtNumber: p.number,
         starts: 0, subApps: 0, minutesPlayed: 0,
         goals: 0, assists: 0, yellowCards: 0, redCards: 0,
-        xg: 0, passes: 0, tackles: 0, matches: [],
+        xg: 0, passes: 0, tackles: 0,
+        matches: [],
       };
     }
   }
 
-  // Add box score players missing from lineup/events
-  console.log('BOX SCORE CHECK - boxScore type:', typeof boxScore, Array.isArray(boxScore));
+  console.log('Players after bench:', Object.values(players).map(p => p.name));
 
+
+  console.log('Events order for this match:');
+(events || []).filter(e => e.team?.id === teamHlId).forEach(e => 
+  console.log(`  ${e.time} ${e.type} ${e.player}`)
+);
+
+  // Add box score players missing from lineup
+console.log('BOX SCORE CHECK:', typeof boxScore, Array.isArray(boxScore));
 for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
   if (teamData.team?.id !== teamHlId) continue;
   for (const bsPlayer of teamData.players || []) {
     const existing = findPlayer(players, bsPlayer.name);
     if (!existing) {
+      // Player not found at all - add them
       players[bsPlayer.id] = {
         id: bsPlayer.id,
         name: bsPlayer.name,
@@ -184,15 +201,31 @@ for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
           minutesPlayed: bsPlayer.minutesPlayed || 0,
         }],
       };
+    } else if (!existing.matches.find(m => m.id === match.id)) {
+      // Player exists but has no entry for THIS match - add it
+      if (bsPlayer.isSubstitute) {
+        existing.subApps += 1;
+      } else {
+        existing.starts += 1;
+      }
+      existing.minutesPlayed += bsPlayer.minutesPlayed || 0;
+      existing.matches.push({
+        ...baseMatchInfo,
+        started: !bsPlayer.isSubstitute,
+        minutesPlayed: bsPlayer.minutesPlayed || 0,
+      });
     }
   }
-}  
+}
 
+  // Process events
   for (const e of events || []) {
-    if (!e.team || e.team.id !== teamHlId) continue;
+  if (!e.team || e.team.id !== teamHlId) continue;
+  
+  // just check once
     const minute = parseInt(e.time) || 0;
 
-if (e.type === 'Substitution') {
+    if (e.type === 'Substitution') {
   const playerA = findPlayer(players, e.player);
   const playerB = findPlayer(players, e.substituted);
   const playerAIsStarter = playerA && starterNames.has(playerA.name);
@@ -215,7 +248,11 @@ if (e.type === 'Substitution') {
     });
   }
 } else if (e.type === 'Goal' || e.type === 'Penalty') {
-      const scorer = findPlayer(players, e.player);
+  const scorer = findPlayer(players, e.player);
+   console.log(`Goal: ${e.player} -> found: ${scorer?.name || 'NOT FOUND'}`);
+  console.log('Players in object:', Object.values(players).map(p => p.name).join(', '));
+     
+  
       if (scorer) {
         scorer.goals += 1;
         const last = scorer.matches.at(-1);
@@ -246,6 +283,7 @@ if (e.type === 'Substitution') {
     }
   }
 
+  // Add player box score stats
   for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
     if (teamData.team?.id !== teamHlId) continue;
     for (const bsPlayer of teamData.players || []) {
@@ -264,6 +302,7 @@ if (e.type === 'Substitution') {
     }
   }
 
+  // Extract team statistics
   const statsArr = Array.isArray(statistics) ? statistics : [];
   const teamStatData = statsArr.find(t => t.team?.id === teamHlId);
   const s = {};
@@ -271,8 +310,10 @@ if (e.type === 'Substitution') {
     s[stat.displayName] = stat.value;
   }
 
+  // Extract box score aggregates for team
   const teamBoxScore = Array.isArray(boxScore)
-    ? boxScore.find(t => t.team?.id === teamHlId) : null;
+    ? boxScore.find(t => t.team?.id === teamHlId)
+    : null;
 
   let totalPasses = 0, successfulPasses = 0, totalTackles = 0, totalXg = 0;
   for (const player of teamBoxScore?.players || []) {
@@ -284,23 +325,31 @@ if (e.type === 'Substitution') {
   }
 
   const passAccuracy = totalPasses > 0
-    ? Math.round((successfulPasses / totalPasses) * 100) : 0;
+    ? Math.round((successfulPasses / totalPasses) * 100)
+    : 0;
 
   const teamStats = {
-    competition: compCode, date: match.date, opponent: opponent?.name,
+    competition: compCode,
+    date: match.date,
+    opponent: opponent?.name,
     homeAway: isHome ? 'H' : 'A',
     result: teamScore > oppScore ? 'W' : teamScore < oppScore ? 'L' : 'D',
-    goalsFor: teamScore || 0, goalsAgainst: oppScore || 0,
+    goalsFor: teamScore || 0,
+    goalsAgainst: oppScore || 0,
     cleanSheet: oppScore === 0,
     possession: (() => { const p = s['Possession'] || 0; return p < 1 ? Math.round(p * 100) : p; })(),
     shotsOnGoal: s['Shots on target'] || 0,
     shotsOffGoal: s['Shots off target'] || 0,
     shots: (s['Shots on target'] || 0) + (s['Shots off target'] || 0) + (s['Blocked shots'] || 0),
     saves: s['Goalkeeper saves'] || 0,
-    corners: s['Corners'] || 0, fouls: s['Fouls'] || 0,
-    yellowCards: s['Yellow cards'] || 0, redCards: s['Red cards'] || 0,
-    xg: totalXg, totalPasses, passAccuracy, tackles: totalTackles,
-    id: String(match.id),
+    corners: s['Corners'] || 0,
+    fouls: s['Fouls'] || 0,
+    yellowCards: s['Yellow cards'] || 0,
+    redCards: s['Red cards'] || 0,
+    xg: totalXg,
+    totalPasses,
+    passAccuracy,
+    tackles: totalTackles,
   };
 
   return {
