@@ -99,6 +99,13 @@ function findPlayer(players, name) {
     // Check if first word matches first name (e.g. "Samuel" matches "Samuel Iling-Junior")
     if (simplify(p.name).startsWith(simplify(name.split(' ')[0])) &&
         simplify(p.name).includes(simplify(name.split(' ').pop()))) return true;
+         // Check if stored name is abbreviated e.g. stored "T. Gale" matches search "Thierry Gale"
+const pParts = p.name.split(' ');
+if (pParts.length >= 2 && pParts[0].endsWith('.')) {
+  const initial = pParts[0][0].toUpperCase();
+  const lastName = simplify(pParts.slice(1).join(' '));
+  return name.toUpperCase().startsWith(initial) && simplify(name).includes(lastName);
+}
     return false;
   });
 }
@@ -152,6 +159,34 @@ function processMatch(match, events, lineups, statistics, boxScore, teamHlId) {
       };
     }
   }
+
+  // Add box score players missing from lineup/events
+  console.log('BOX SCORE CHECK - boxScore type:', typeof boxScore, Array.isArray(boxScore));
+
+for (const teamData of Array.isArray(boxScore) ? boxScore : []) {
+  if (teamData.team?.id !== teamHlId) continue;
+  for (const bsPlayer of teamData.players || []) {
+    const existing = findPlayer(players, bsPlayer.name);
+    if (!existing) {
+      players[bsPlayer.id] = {
+        id: bsPlayer.id,
+        name: bsPlayer.name,
+        position: bsPlayer.position || '',
+        shirtNumber: bsPlayer.shirtNumber || null,
+        starts: bsPlayer.isSubstitute ? 0 : 1,
+        subApps: bsPlayer.isSubstitute ? 1 : 0,
+        minutesPlayed: bsPlayer.minutesPlayed || 0,
+        goals: 0, assists: 0, yellowCards: 0, redCards: 0,
+        xg: 0, passes: 0, tackles: 0,
+        matches: [{
+          ...baseMatchInfo,
+          started: !bsPlayer.isSubstitute,
+          minutesPlayed: bsPlayer.minutesPlayed || 0,
+        }],
+      };
+    }
+  }
+}  
 
   for (const e of events || []) {
     if (!e.team || e.team.id !== teamHlId) continue;
